@@ -9,6 +9,31 @@ const Store = (() => {
   // Hash de acceso (SHA-256 de usuario|contraseña). No se documenta en el repo.
   const ACCESS_HASH = '4910db4d71ab6452a6b35ced89bce1f9ee91d93f878e263875f9f65cf463f718';
 
+  // Sincronización integrada: el token de GitHub viaja cifrado (AES-GCM con
+  // llave derivada de las credenciales). Solo se descifra al iniciar sesión
+  // con el usuario y contraseña correctos; en el código solo hay ruido.
+  const SYNC_EMBED = {
+    owner: 'PaulHRios',
+    repo: 'maya_datos',
+    salt: 'pyjCGrQ4cDvf9+LtA9Cn8w==',
+    iv: 'irFc/7hkawYmbQgO',
+    ct: 'GJIDVJwuJg0rf1kxRNR+KAUr6DtC0befifr4Q2+mzCNGgJrBKLhMWKOKH7NFn2wBgYqMN5qSgucgQT//+knpH+ZBu2I0i5lsZh+VdI9CaGbYDZF8t5vJTEUO9UNeAlVOQnPWKlRTRz3/upt1ug==',
+  };
+
+  async function descifrarToken(credencial) {
+    try {
+      const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+      const material = await crypto.subtle.importKey(
+        'raw', new TextEncoder().encode(credencial), 'PBKDF2', false, ['deriveKey']);
+      const key = await crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt: b64(SYNC_EMBED.salt), iterations: 310000, hash: 'SHA-256' },
+        material, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+      const plano = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: b64(SYNC_EMBED.iv) }, key, b64(SYNC_EMBED.ct));
+      return new TextDecoder().decode(plano);
+    } catch { return null; }
+  }
+
   const emptyData = () => ({
     version: 1,
     bebe: { nombre: 'Maya', nacimiento: '' },
@@ -40,9 +65,25 @@ const Store = (() => {
 
   /* ---------- sesión ---------- */
   async function login(user, pass) {
-    const h = await sha256(`${user.trim().toLowerCase()}|${pass}`);
+    const credencial = `${user.trim().toLowerCase()}|${pass}`;
+    const h = await sha256(credencial);
     if (h !== ACCESS_HASH) return false;
     localStorage.setItem(LS_SESSION, 'ok');
+
+    // dejar lista la sincronización sin que haya que configurar nada
+    try {
+      const raw = localStorage.getItem(LS_CONFIG);
+      if (raw) config = Object.assign(config, JSON.parse(raw));
+      if (!config.token) {
+        const token = await descifrarToken(credencial);
+        if (token) {
+          config.token = token;
+          if (!config.owner) config.owner = SYNC_EMBED.owner;
+          if (!config.repo) config.repo = SYNC_EMBED.repo;
+          saveConfig();
+        }
+      }
+    } catch (e) { console.error(e); }
     return true;
   }
   const hasSession = () => localStorage.getItem(LS_SESSION) === 'ok';
@@ -55,6 +96,9 @@ const Store = (() => {
       if (raw) data = Object.assign(emptyData(), JSON.parse(raw));
       const rawCfg = localStorage.getItem(LS_CONFIG);
       if (rawCfg) config = Object.assign(config, JSON.parse(rawCfg));
+      // configuraciones guardadas con versiones viejas pueden traer campos vacíos
+      if (!config.owner) config.owner = SYNC_EMBED.owner;
+      if (!config.repo) config.repo = SYNC_EMBED.repo;
     } catch (e) { console.error('Error cargando datos locales', e); }
   }
 
