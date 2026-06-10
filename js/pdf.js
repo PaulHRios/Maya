@@ -68,7 +68,7 @@ const PDFResumen = (() => {
 
     /* portada / encabezado */
     doc.setFillColor(255, 227, 238);
-    doc.rect(0, 0, 210, 42, 'F');
+    doc.rect(0, 0, 210, 48, 'F');
     doc.setFontSize(26);
     doc.setTextColor(217, 79, 132);
     doc.setFont(undefined, 'bold');
@@ -78,10 +78,16 @@ const PDFResumen = (() => {
     doc.setTextColor(120, 100, 115);
     doc.text(`Del ${desde.toLocaleDateString('es-MX', { dateStyle: 'long' })} al ${hasta.toLocaleDateString('es-MX', { dateStyle: 'long' })}`, 14, 29);
     if (d.bebe.nacimiento) {
-      const edadDias = Math.floor((hasta - new Date(d.bebe.nacimiento)) / 86400000);
-      doc.text(`Nació el ${new Date(d.bebe.nacimiento + 'T12:00').toLocaleDateString('es-MX', { dateStyle: 'long' })} · ${edadDias} días de vida`, 14, 36);
+      const nacio = new Date(`${d.bebe.nacimiento}T${d.bebe.hora || '12:00'}`);
+      const edadDias = Math.floor((hasta - nacio) / 86400000);
+      const horaTxt = d.bebe.hora ? ` a las ${nacio.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' })}` : '';
+      doc.text(`Nació el ${nacio.toLocaleDateString('es-MX', { dateStyle: 'long' })}${horaTxt} · ${edadDias} días de vida`, 14, 36);
     }
-    let y = 54;
+    if (d.bebe.mama || d.bebe.papa) {
+      const papas = [d.bebe.mama && `Mamá: ${d.bebe.mama}`, d.bebe.papa && `Papá: ${d.bebe.papa}`].filter(Boolean).join(' · ');
+      doc.text(papas, 14, 43);
+    }
+    let y = 60;
 
     /* ---- Alimentación ---- */
     if (secciones.tomas) {

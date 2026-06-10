@@ -1012,8 +1012,21 @@
         <div class="form-group"><label>Nombre</label>
           <input type="text" id="a-nombre" value="${esc(d.bebe.nombre)}">
         </div>
-        <div class="form-group"><label>Fecha de nacimiento</label>
-          <input type="date" id="a-nac" value="${d.bebe.nacimiento || ''}">
+        <div class="form-row">
+          <div class="form-group"><label>Fecha de nacimiento</label>
+            <input type="date" id="a-nac" value="${d.bebe.nacimiento || ''}">
+          </div>
+          <div class="form-group"><label>Hora</label>
+            <input type="time" id="a-hora-nac" value="${d.bebe.hora || ''}">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Mamá</label>
+            <input type="text" id="a-mama" value="${esc(d.bebe.mama || '')}" placeholder="Rubi">
+          </div>
+          <div class="form-group"><label>Papá</label>
+            <input type="text" id="a-papa" value="${esc(d.bebe.papa || '')}" placeholder="Paul">
+          </div>
         </div>
         <button class="btn-secondary btn-block" id="a-guardar-bebe">Guardar</button>
       </div>
@@ -1071,6 +1084,9 @@
     $('#a-guardar-bebe').onclick = () => {
       d.bebe.nombre = $('#a-nombre').value.trim() || 'Maya';
       d.bebe.nacimiento = $('#a-nac').value;
+      d.bebe.hora = $('#a-hora-nac').value;
+      d.bebe.mama = $('#a-mama').value.trim();
+      d.bebe.papa = $('#a-papa').value.trim();
       d.bebe.actualizado = new Date().toISOString();
       Store.saveLocal();
       toast('Guardado 💗');
@@ -1233,7 +1249,7 @@
     $('#header-title').textContent = d.bebe.nombre || 'Maya';
     let sub = fmtFechaLarga(new Date());
     if (d.bebe.nacimiento) {
-      const dias = Math.floor((Date.now() - new Date(d.bebe.nacimiento + 'T00:00')) / 86400000);
+      const dias = Math.floor((Date.now() - new Date(`${d.bebe.nacimiento}T${d.bebe.hora || '00:00'}`)) / 86400000);
       sub += dias < 60 ? ` · ${dias} días de vida 💗` : ` · ${Math.floor(dias / 7)} semanas 💗`;
     }
     $('#header-sub').textContent = sub;
