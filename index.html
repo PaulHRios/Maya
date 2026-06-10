@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Maya</title>
+<meta name="description" content="Registro de salud y cuidados de Maya">
+<meta name="theme-color" content="#fff5f8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Maya">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ====== LOGIN ====== -->
+<div id="login-screen" class="login-screen hidden">
+  <div class="login-card">
+    <div class="login-icon">💗</div>
+    <h1>Maya</h1>
+    <p class="login-sub">El diario de nuestra bebé</p>
+    <form id="login-form">
+      <input type="text" id="login-user" placeholder="Usuario" autocomplete="username" autocapitalize="none" required>
+      <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password" required>
+      <button type="submit" class="btn-primary btn-block">Entrar</button>
+    </form>
+    <p id="login-error" class="login-error hidden">Usuario o contraseña incorrectos</p>
+  </div>
+</div>
+
+<!-- ====== APP ====== -->
+<div id="app" class="app hidden">
+
+  <header class="app-header">
+    <div class="header-left">
+      <h1 id="header-title">Maya</h1>
+      <p id="header-sub" class="header-sub"></p>
+    </div>
+    <div class="header-right">
+      <span id="sync-dot" class="sync-dot" title="Sincronización"></span>
+      <button id="btn-settings" class="icon-btn" aria-label="Ajustes">⚙️</button>
+    </div>
+  </header>
+
+  <!-- Banner de timers activos (lactancia / sueño) -->
+  <div id="active-timers" class="active-timers"></div>
+
+  <main id="main" class="main"></main>
+
+  <nav class="tabbar">
+    <button class="tab active" data-tab="inicio"><span class="tab-icon">🏠</span><span>Inicio</span></button>
+    <button class="tab" data-tab="comida"><span class="tab-icon">🍼</span><span>Comida</span></button>
+    <button class="tab" data-tab="sueno"><span class="tab-icon">🌙</span><span>Sueño</span></button>
+    <button class="tab" data-tab="panal"><span class="tab-icon">💧</span><span>Pañal</span></button>
+    <button class="tab" data-tab="mas"><span class="tab-icon">✨</span><span>Más</span></button>
+  </nav>
+
+</div>
+
+<!-- ====== HOJA MODAL ====== -->
+<div id="sheet-backdrop" class="sheet-backdrop hidden"></div>
+<div id="sheet" class="sheet hidden">
+  <div class="sheet-handle"></div>
+  <div id="sheet-content"></div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<!-- canvas oculto para gráficas del PDF -->
+<canvas id="pdf-canvas" width="900" height="450" style="display:none"></canvas>
+
+<script src="js/vendor/chart.umd.min.js"></script>
+<script src="js/vendor/jspdf.umd.min.js"></script>
+<script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
+<script src="js/store.js"></script>
+<script src="js/info.js"></script>
+<script src="js/pdf.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
