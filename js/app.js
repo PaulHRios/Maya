@@ -313,22 +313,46 @@
   }
 
   /* ---------- timer de lactancia ---------- */
+  // segundos transcurridos sin contar las pausas
+  function segundosToma(t) {
+    let ms = Date.now() - new Date(t.inicio);
+    for (const p of (t.pausas || [])) ms -= (new Date(p.hasta) - new Date(p.desde));
+    if (t.pausadoDesde) ms -= (Date.now() - new Date(t.pausadoDesde));
+    return Math.max(0, Math.floor(ms / 1000));
+  }
+
   function iniciarToma(lado) {
     const timers = Store.getTimers();
     if (timers.toma) { toast('Ya hay una toma en curso'); return; }
-    timers.toma = { lado, inicio: new Date().toISOString() };
+    timers.toma = { lado, inicio: new Date().toISOString(), pausas: [] };
     Store.setTimers(timers);
     toast(`Timer iniciado · pecho ${lado === 'izq' ? 'izquierdo' : 'derecho'} ▶`);
+  }
+
+  function pausarToma() {
+    const timers = Store.getTimers();
+    const t = timers.toma;
+    if (!t) return;
+    if (t.pausadoDesde) {
+      t.pausas = t.pausas || [];
+      t.pausas.push({ desde: t.pausadoDesde, hasta: new Date().toISOString() });
+      delete t.pausadoDesde;
+      toast('Toma reanudada ▶');
+    } else {
+      t.pausadoDesde = new Date().toISOString();
+      toast('Toma en pausa ⏸');
+    }
+    Store.setTimers(timers);
   }
 
   function terminarToma(cancelar) {
     const timers = Store.getTimers();
     if (!timers.toma) return;
     const t = timers.toma;
+    const dur = segundosToma(t);
     delete timers.toma;
     Store.setTimers(timers);
     if (cancelar) { toast('Toma cancelada'); return; }
-    const dur = Math.round((Date.now() - new Date(t.inicio)) / 1000);
     Store.add('tomas', { tipo: 'materno', lado: t.lado, inicio: t.inicio, duracionSeg: dur, ml: null, notas: '' });
     toast(`Toma guardada · ${fmtDur(dur)} 🤱`);
   }
@@ -1153,13 +1177,15 @@
     const cont = $('#active-timers');
     let html = '';
     if (timers.toma) {
-      const seg = Math.floor((Date.now() - new Date(timers.toma.inicio)) / 1000);
+      const seg = segundosToma(timers.toma);
+      const enPausa = !!timers.toma.pausadoDesde;
       html += `
-        <div class="timer-banner">
-          <div class="timer-info">🤱 ${timers.toma.lado === 'izq' ? 'Izquierda' : 'Derecha'}
+        <div class="timer-banner" style="${enPausa ? 'opacity:.75' : ''}">
+          <div class="timer-info">🤱 ${timers.toma.lado === 'izq' ? 'Izquierda' : 'Derecha'}${enPausa ? ' · en pausa' : ''}
             <span class="timer-clock">${fmtDur(seg)}</span></div>
           <div>
             <button data-accion="toma-cancelar">✕</button>
+            <button data-accion="toma-pausa">${enPausa ? '▶' : '⏸'}</button>
             <button class="stop" data-accion="toma-terminar">■ Terminar</button>
           </div>
         </div>`;
@@ -1177,7 +1203,26 @@
         </div>`;
     }
     cont.innerHTML = html;
+    actualizarWakeLock();
   }
+
+  // mantener la pantalla encendida mientras hay una toma en curso,
+  // para que el contador siga visible y el teléfono no se bloquee solo
+  let wakeLock = null;
+  async function actualizarWakeLock() {
+    const t = Store.getTimers();
+    const necesita = !!t.toma && !t.toma.pausadoDesde;
+    try {
+      if (necesita && !wakeLock && 'wakeLock' in navigator && document.visibilityState === 'visible') {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } else if (!necesita && wakeLock) {
+        await wakeLock.release();
+        wakeLock = null;
+      }
+    } catch { /* sin soporte o sin permiso: la app funciona igual */ }
+  }
+  document.addEventListener('visibilitychange', actualizarWakeLock);
 
   /* ============================================================
      acciones globales y navegación
@@ -1188,6 +1233,7 @@
       const a = btn.dataset.accion;
       if (a === 'toma-izq') iniciarToma('izq');
       if (a === 'toma-der') iniciarToma('der');
+      if (a === 'toma-pausa') pausarToma();
       if (a === 'toma-terminar') terminarToma(false);
       if (a === 'toma-cancelar') { if (confirm('¿Cancelar la toma sin guardar?')) terminarToma(true); }
       if (a === 'toma-manual') hojaBiberon('materno');
