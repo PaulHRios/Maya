@@ -24,7 +24,7 @@ const Store = (() => {
   });
 
   let data = emptyData();
-  let config = { owner: '', repo: '', branch: 'main', token: '', autoSync: true, lastSync: null };
+  let config = { owner: 'PaulHRios', repo: 'maya_datos', branch: 'main', token: '', autoSync: true, lastSync: null };
   let syncState = 'off'; // off | ok | busy | error
   let syncTimer = null;
   const listeners = [];

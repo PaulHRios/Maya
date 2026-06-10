@@ -1030,7 +1030,7 @@
             <input type="text" id="a-owner" value="${esc(cfg.owner)}" placeholder="PaulHRios" autocapitalize="none">
           </div>
           <div class="form-group"><label>Repositorio</label>
-            <input type="text" id="a-repo" value="${esc(cfg.repo)}" placeholder="maya-datos" autocapitalize="none">
+            <input type="text" id="a-repo" value="${esc(cfg.repo)}" placeholder="maya_datos" autocapitalize="none">
           </div>
         </div>
         <div class="form-group"><label>Token de acceso (fine-grained, con permiso Contents)</label>
@@ -1288,6 +1288,22 @@
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
+
+  // enlace de configuración (#setup=...): deja lista la sincronización
+  // con un solo toque, sin teclear el token en el celular
+  try {
+    const m = location.hash.match(/[#&]setup=([^&]+)/);
+    if (m) {
+      const cfg = JSON.parse(atob(decodeURIComponent(m[1])));
+      Store.loadLocal();
+      if (cfg.owner) Store.config.owner = cfg.owner;
+      if (cfg.repo) Store.config.repo = cfg.repo;
+      if (cfg.token) Store.config.token = cfg.token;
+      Store.saveConfig();
+      history.replaceState(null, '', location.pathname + location.search);
+      toast('Sincronización configurada ✅');
+    }
+  } catch (e) { console.error('Enlace de configuración no válido', e); }
 
   if (Store.hasSession()) iniciarApp();
   else $('#login-screen').classList.remove('hidden');
