@@ -113,14 +113,16 @@
     return Math.max(0, Math.floor((Date.now() - new Date(`${b.nacimiento}T${b.hora || '12:00'}`)) / 86400000));
   }
 
+  // semana 0 = días 0–6 de vida; cambia en cada múltiplo de 7 días.
+  // El recordatorio sigue apareciendo hasta que la foto de esa semana exista.
   const semanaActual = () => {
     const e = edadDias();
-    return e === null ? null : Math.floor(e / 7) + 1;
+    return e === null ? null : Math.floor(e / 7);
   };
 
   function bannerFotoSemanal() {
     const sem = semanaActual();
-    if (!sem || Store.data.fotos.some(f => f.semana === sem)) return '';
+    if (sem === null || Store.data.fotos.some(f => f.semana === sem)) return '';
     return `<div class="foto-semanal">
       <span class="fs-emoji">📸</span>
       <div>
@@ -583,7 +585,7 @@
     const total = info.tareas.length + 1; // +1 por la foto semanal
     const completadas = hechas + (fotoLista ? 1 : 0);
     const rachaDias = Actividades.racha(regs, hoy);
-    const fotosSem = new Set(Store.data.fotos.filter(f => f.semana).map(f => f.semana)).size;
+    const fotosSem = new Set(Store.data.fotos.filter(f => f.semana != null).map(f => f.semana)).size;
     const medallas = Actividades.medallas(regs, fotosSem, rachaDias);
     const C = 2 * Math.PI * 36;
     const timers = Store.getTimers();
@@ -1127,15 +1129,15 @@
         canvas.height = Math.round(img.height * escala);
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-        const titulo = semana ? `Semana ${semana} 💗` : (prompt('Título de la foto (opcional):') || '');
+        const titulo = semana != null ? `Semana ${semana} 💗` : (prompt('Título de la foto (opcional):') || '');
         const id = Store.uid();
         Store.add('fotos', {
           id, fecha: new Date().toISOString(), titulo,
           archivo: `${new Date().toISOString().slice(0, 10)}-${id}.jpg`,
           dataUrl, sincronizada: false,
-          ...(semana ? { semana } : {}),
+          ...(semana != null ? { semana } : {}),
         });
-        if (semana) {
+        if (semana != null) {
           confeti(80);
           celebracion('📸', `¡Foto de la semana ${semana}!`, 'Su colección de recuerdos va creciendo');
         } else {
@@ -1148,12 +1150,27 @@
   }
 
   function pedirFotoSemanal(semana) {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'environment';
-    input.onchange = e => procesarFoto(e.target.files[0], semana);
-    input.click();
+    abrirSheet(`
+      <h2>Foto de la semana ${semana} 📸</h2>
+      <p style="font-size:14px;color:var(--text-2);margin-bottom:14px">
+        ${semana === 0 ? 'Su primera semana de vida 💗' : `${semana * 7} días de vida cumplidos`}
+        — pueden tomarla ahora o elegir una que ya tengan.
+      </p>
+      <div class="form-row">
+        <button class="btn-primary" style="flex:1" id="fs-camara">📷 Tomar foto</button>
+        <button class="btn-secondary" style="flex:1" id="fs-carrete">🖼️ Del carrete</button>
+      </div>
+    `);
+    const lanzar = conCamara => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      if (conCamara) input.capture = 'environment';
+      input.onchange = e => { cerrarSheet(); procesarFoto(e.target.files[0], semana); };
+      input.click();
+    };
+    $('#fs-camara').onclick = () => lanzar(true);
+    $('#fs-carrete').onclick = () => lanzar(false);
   }
 
   function verFoto(f) {
