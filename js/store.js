@@ -157,6 +157,12 @@ const Store = (() => {
     saveLocal();
   }
 
+  /* identidad del dispositivo: a quién pertenece este teléfono.
+     Se guarda localmente en cada equipo, una sola vez. */
+  const LS_DISPOSITIVO = 'maya.dispositivo.v1';
+  const getDispositivo = () => localStorage.getItem(LS_DISPOSITIVO) || '';
+  const setDispositivo = v => localStorage.setItem(LS_DISPOSITIVO, v);
+
   /* foto de perfil: vive en el repo privado; se cachea por dispositivo */
   const LS_AVATAR = 'maya.avatar.v1';
   function getAvatarCache() { return localStorage.getItem(LS_AVATAR); }
@@ -327,6 +333,7 @@ const Store = (() => {
     loadLocal, saveLocal, saveConfig,
     add, update, remove, onChange,
     marcarActividad, fetchAvatar, getAvatarCache,
+    getDispositivo, setDispositivo,
     getTimers, setTimers,
     syncNow, scheduleSync, testConnection, canSync, fetchPhoto,
     get data() { return data; },

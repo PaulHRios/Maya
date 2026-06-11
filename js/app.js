@@ -417,7 +417,7 @@
         <div class="quien-chips" id="vig-quien">${chipsQuien(timers.vigilia.quien)}</div>
         <div class="bitacora">
           ${(timers.vigilia.notas || []).map((n, i) => `
-            <div class="bitacora-item"><b>${fmtHora(n.hora)}</b><span>${esc(n.texto)}</span>
+            <div class="bitacora-item"><b>${fmtHora(n.hora)}</b><span>${esc(n.texto)}${etiquetaAutor(n)}</span>
             <button class="bit-x" data-bit-x="${i}">✕</button></div>`).join('')
             || '<p style="font-size:13px;color:var(--text-2)">Ve anotando qué pasa: "llora por cólicos", "la cargamos y se calmó", "pusimos música"…</p>'}
         </div>
@@ -447,7 +447,7 @@
           <div class="entry-main">
             <div class="entry-title">${vig ? 'Vigilia' : 'Durmió'} ${fmtDurLarga(ms)}</div>
             <div class="entry-sub">${fmtHora(s.inicio)} → ${fmtHora(s.fin)}${s.quien ? ` · ${esc(nombreQuien(s.quien))}` : ''}${s.notas ? ` · ${esc(s.notas)}` : ''}</div>
-            ${bit.length ? `<div class="entry-bitacora">${bit.map(n => `<div><b>${fmtHora(n.hora)}</b> ${esc(n.texto)}</div>`).join('')}</div>` : ''}
+            ${bit.length ? `<div class="entry-bitacora">${bit.map(n => `<div><b>${fmtHora(n.hora)}</b> ${esc(n.texto)}${etiquetaAutor(n)}</div>`).join('')}</div>` : ''}
           </div>
           ${btnsEntrada('suenos', s.id)}
         </div>`;
@@ -461,7 +461,7 @@
         // cada relevo queda en la bitácora con su hora
         if (nuevo && nuevo !== t.vigilia.quien) {
           t.vigilia.notas = t.vigilia.notas || [];
-          t.vigilia.notas.push({ hora: new Date().toISOString(), texto: `🔄 Ahora con ella: ${nombreQuien(nuevo)}` });
+          t.vigilia.notas.push({ hora: new Date().toISOString(), texto: `🔄 Ahora con ella: ${nombreQuien(nuevo)}`, autor: Store.getDispositivo() || null });
         }
         t.vigilia.quien = nuevo;
         Store.setTimers(t);
@@ -481,11 +481,14 @@
     }
   }
 
+  // etiqueta pequeña de quién escribió una nota (según el dueño del teléfono)
+  const etiquetaAutor = n => n.autor ? `<small class="bit-autor">${esc(nombreQuien(n.autor))}</small>` : '';
+
   function agregarNotaVigilia(texto) {
     const t = Store.getTimers();
     if (!t.vigilia) return;
     t.vigilia.notas = t.vigilia.notas || [];
-    t.vigilia.notas.push({ hora: new Date().toISOString(), texto });
+    t.vigilia.notas.push({ hora: new Date().toISOString(), texto, autor: Store.getDispositivo() || null });
     Store.setTimers(t);
     toast('Nota agregada 📝');
   }
@@ -516,7 +519,7 @@
       const cont = $('#f-bitacora');
       if (!cont) return;
       cont.innerHTML = bitacora.map((n, i) => `
-        <div class="bitacora-item"><b>${fmtHora(n.hora)}</b><span>${esc(n.texto)}</span>
+        <div class="bitacora-item"><b>${fmtHora(n.hora)}</b><span>${esc(n.texto)}${etiquetaAutor(n)}</span>
         <button type="button" class="bit-x" data-i="${i}">✕</button></div>`).join('');
       cont.querySelectorAll('.bit-x').forEach(b => b.onclick = () => {
         bitacora.splice(Number(b.dataset.i), 1);
@@ -568,7 +571,7 @@
     $('#f-bit-agregar').onclick = () => {
       const texto = $('#f-bit-texto').value.trim();
       if (!texto) return;
-      bitacora.push({ hora: new Date().toISOString(), texto });
+      bitacora.push({ hora: new Date().toISOString(), texto, autor: Store.getDispositivo() || null });
       $('#f-bit-texto').value = '';
       pintarBitacora();
     };
@@ -1514,6 +1517,13 @@
             <input type="text" id="a-papa" value="${esc(d.bebe.papa || '')}" placeholder="Paul">
           </div>
         </div>
+        <div class="form-group"><label>Este teléfono lo usa</label>
+          <select id="a-dispositivo">
+            <option value="" ${!Store.getDispositivo() ? 'selected' : ''}>Sin definir</option>
+            <option value="mama" ${Store.getDispositivo() === 'mama' ? 'selected' : ''}>👩 ${esc(d.bebe.mama || 'Mamá')}</option>
+            <option value="papa" ${Store.getDispositivo() === 'papa' ? 'selected' : ''}>👨 ${esc(d.bebe.papa || 'Papá')}</option>
+          </select>
+        </div>
         <button class="btn-secondary btn-block" id="a-guardar-bebe">Guardar</button>
       </div>
 
@@ -1574,6 +1584,7 @@
       d.bebe.mama = $('#a-mama').value.trim();
       d.bebe.papa = $('#a-papa').value.trim();
       d.bebe.actualizado = new Date().toISOString();
+      Store.setDispositivo($('#a-dispositivo').value);
       Store.saveLocal();
       toast('Guardado 💗');
       actualizarHeader();
@@ -1831,10 +1842,33 @@
 
     cargarAvatar();
 
+    // una sola vez por teléfono: ¿de quién es este dispositivo?
+    if (!Store.getDispositivo()) {
+      setTimeout(preguntarDispositivo, 600);
+    }
+
     if (Store.canSync()) {
       await Store.syncNow();
       render();
     }
+  }
+
+  function preguntarDispositivo() {
+    const b = Store.data.bebe;
+    abrirSheet(`
+      <h2>¿De quién es este teléfono? 📱</h2>
+      <p style="font-size:14px;color:var(--text-2)">Así cada nota que escriban llevará una etiquetita
+      de quién la escribió. Se pregunta una sola vez por teléfono (se puede cambiar en Ajustes).</p>
+      <div class="dispositivo-botones">
+        <button class="bg-pink" data-disp="mama"><span>👩</span>${esc(b.mama || 'Mamá')}</button>
+        <button class="bg-blue" data-disp="papa"><span>👨</span>${esc(b.papa || 'Papá')}</button>
+      </div>
+    `);
+    document.querySelectorAll('[data-disp]').forEach(btn => btn.onclick = () => {
+      Store.setDispositivo(btn.dataset.disp);
+      cerrarSheet();
+      toast(`Teléfono de ${nombreQuien(btn.dataset.disp)} 💗`);
+    });
   }
 
   /* ---------- avatar y actualizar con un toque ---------- */

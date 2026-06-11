@@ -177,7 +177,7 @@ const PDFResumen = (() => {
             const min = Math.round((new Date(s.fin) - new Date(s.inicio)) / 60000);
             const notas = [
               s.notas,
-              ...(s.bitacora || []).map(n => `${fmtHora(n.hora)} ${n.texto}`),
+              ...(s.bitacora || []).map(n => `${fmtHora(n.hora)}${n.autor ? ` [${quien[n.autor] || n.autor}]` : ''} ${n.texto}`),
             ].filter(Boolean).join(' · ');
             return [s.tipo === 'vigilia' ? 'Vigilia' : 'Sueño',
               fmtFechaHora(s.inicio), fmtFechaHora(s.fin), `${Math.floor(min / 60)}h ${min % 60}m`,
