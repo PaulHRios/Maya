@@ -44,7 +44,8 @@ const Store = (() => {
     intervenciones: [], // {id, titulo, categoria, fecha, notas, updatedAt}
     medicamentos: [], // {id, nombre, dosis, frecuencia, inicio, fin, notas, activo, updatedAt}
     crecimiento: [],  // {id, fecha, pesoKg, tallaCm, perimetroCm, updatedAt}
-    fotos: [],        // {id, fecha, titulo, archivo, dataUrl?, sincronizada, updatedAt}
+    fotos: [],        // {id, fecha, titulo, archivo, dataUrl?, sincronizada, semana?, updatedAt}
+    actividades: [],  // {id, fecha: 'YYYY-MM-DD', tarea, titulo, hecha, duracionSeg, updatedAt}
     borrados: [],     // tombstones {col, id, at}
   });
 
@@ -119,7 +120,7 @@ const Store = (() => {
   function onChange(fn) { listeners.push(fn); }
 
   /* ---------- CRUD genérico ---------- */
-  const COLS = ['tomas', 'suenos', 'panales', 'condiciones', 'intervenciones', 'medicamentos', 'crecimiento', 'fotos'];
+  const COLS = ['tomas', 'suenos', 'panales', 'condiciones', 'intervenciones', 'medicamentos', 'crecimiento', 'fotos', 'actividades'];
 
   function add(col, item) {
     item.id = item.id || uid();
@@ -141,6 +142,33 @@ const Store = (() => {
     data[col] = data[col].filter(x => x.id !== id);
     data.borrados.push({ col, id, at: now() });
     saveLocal();
+  }
+
+  // marca o desmarca una tarea del día (id determinístico: se fusiona
+  // bien aunque los dos celulares completen la misma)
+  function marcarActividad(fecha, tarea, titulo, hecha, duracionSeg) {
+    const id = `act-${fecha}-${tarea}`;
+    const existente = data.actividades.find(a => a.id === id);
+    if (existente) {
+      Object.assign(existente, { hecha, duracionSeg: duracionSeg ?? existente.duracionSeg, updatedAt: now() });
+    } else {
+      data.actividades.push({ id, fecha, tarea, titulo, hecha, duracionSeg: duracionSeg || null, updatedAt: now() });
+    }
+    saveLocal();
+  }
+
+  /* foto de perfil: vive en el repo privado; se cachea por dispositivo */
+  const LS_AVATAR = 'maya.avatar.v1';
+  function getAvatarCache() { return localStorage.getItem(LS_AVATAR); }
+  async function fetchAvatar() {
+    if (!canSync()) return getAvatarCache();
+    try {
+      const f = await ghGetFile('fotos/avatar.jpg');
+      if (!f || !f.content) return getAvatarCache();
+      const url = `data:image/jpeg;base64,${f.content.replace(/\n/g, '')}`;
+      localStorage.setItem(LS_AVATAR, url);
+      return url;
+    } catch { return getAvatarCache(); }
   }
 
   /* ---------- timers persistentes (lactancia / sueño) ---------- */
@@ -298,6 +326,7 @@ const Store = (() => {
     login, hasSession, logout,
     loadLocal, saveLocal, saveConfig,
     add, update, remove, onChange,
+    marcarActividad, fetchAvatar, getAvatarCache,
     getTimers, setTimers,
     syncNow, scheduleSync, testConnection, canSync, fetchPhoto,
     get data() { return data; },

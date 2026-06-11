@@ -101,6 +101,36 @@
   /* ============================================================
      INICIO
   ============================================================ */
+  function fechaLocal(d = new Date()) {
+    d = new Date(d);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+
+  function edadDias() {
+    const b = Store.data.bebe;
+    if (!b.nacimiento) return null;
+    return Math.max(0, Math.floor((Date.now() - new Date(`${b.nacimiento}T${b.hora || '12:00'}`)) / 86400000));
+  }
+
+  const semanaActual = () => {
+    const e = edadDias();
+    return e === null ? null : Math.floor(e / 7) + 1;
+  };
+
+  function bannerFotoSemanal() {
+    const sem = semanaActual();
+    if (!sem || Store.data.fotos.some(f => f.semana === sem)) return '';
+    return `<div class="foto-semanal">
+      <span class="fs-emoji">📸</span>
+      <div>
+        <div class="fs-titulo">Foto de la semana ${sem}</div>
+        <div class="fs-sub">Su retrato semanal para ver cómo crece</div>
+      </div>
+      <button data-accion="foto-semanal" data-sem="${sem}">Tomarla</button>
+    </div>`;
+  }
+
   function renderInicio() {
     const d = Store.data;
     const hoy = new Date();
@@ -129,6 +159,7 @@
     };
 
     main.innerHTML = `
+      ${bannerFotoSemanal()}
       <div class="quick-actions">
         <button class="quick-btn" data-accion="toma-izq"><span>🤱</span>Pecho izq.</button>
         <button class="quick-btn" data-accion="toma-der"><span>🤱</span>Pecho der.</button>
@@ -494,6 +525,178 @@
       cerrarSheet();
       toast('Pañal actualizado');
     };
+  }
+
+  /* ============================================================
+     RETOS (actividades de estimulación)
+  ============================================================ */
+  function confeti(cantidad = 60) {
+    const colores = ['#f06a9b', '#ffd166', '#4cc38a', '#74b9f0', '#c79df5', '#ff9ec3'];
+    for (let i = 0; i < cantidad; i++) {
+      const c = document.createElement('div');
+      c.className = 'confeti';
+      c.style.left = `${Math.random() * 100}vw`;
+      c.style.background = colores[i % colores.length];
+      c.style.width = c.style.height = `${6 + Math.random() * 7}px`;
+      c.style.borderRadius = Math.random() > .5 ? '50%' : '2px';
+      c.style.animationDuration = `${1.3 + Math.random() * 1.4}s`;
+      c.style.animationDelay = `${Math.random() * .35}s`;
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 3200);
+    }
+  }
+
+  function celebracion(emoji, texto, sub) {
+    const div = document.createElement('div');
+    div.className = 'celebracion';
+    div.innerHTML = `<div class="cele-card">
+      <span class="cele-emoji">${emoji}</span>
+      <div class="cele-texto">${texto}</div>
+      ${sub ? `<div class="cele-sub">${sub}</div>` : ''}
+    </div>`;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3300);
+  }
+
+  function tareasHoy() {
+    const dias = edadDias();
+    if (dias === null) return null;
+    return Actividades.tareasDeHoy(dias, Store.data.condiciones, fechaLocal());
+  }
+
+  function renderRetos() {
+    const info = tareasHoy();
+    if (!info) {
+      main.innerHTML = `
+        <h2 class="section-title">Retos del día 🏆</h2>
+        <div class="empty-state"><span class="big">🎂</span>
+          Para sugerirle actividades a su medida, pon la fecha de nacimiento de Maya en
+          <b>Más → Ajustes</b>.</div>`;
+      return;
+    }
+    const hoy = fechaLocal();
+    const regs = Store.data.actividades;
+    const hechaHoy = key => regs.some(a => a.fecha === hoy && a.tarea === key && a.hecha);
+    const hechas = info.tareas.filter(t => hechaHoy(t.key)).length;
+    const sem = semanaActual();
+    const fotoLista = Store.data.fotos.some(f => f.semana === sem);
+    const total = info.tareas.length + 1; // +1 por la foto semanal
+    const completadas = hechas + (fotoLista ? 1 : 0);
+    const rachaDias = Actividades.racha(regs, hoy);
+    const fotosSem = new Set(Store.data.fotos.filter(f => f.semana).map(f => f.semana)).size;
+    const medallas = Actividades.medallas(regs, fotosSem, rachaDias);
+    const C = 2 * Math.PI * 36;
+    const timers = Store.getTimers();
+
+    main.innerHTML = `
+      <h2 class="section-title">Retos del día 🏆</h2>
+      <div class="retos-hero">
+        <div class="anillo">
+          <svg width="86" height="86">
+            <circle class="fondo" cx="43" cy="43" r="36"></circle>
+            <circle class="avance" cx="43" cy="43" r="36"
+              stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - completadas / total)}"></circle>
+          </svg>
+          <div class="num">${completadas}/${total}<small>de hoy</small></div>
+        </div>
+        <div>
+          <h2>${completadas >= total ? '¡Día perfecto! 🌟' : completadas > 0 ? '¡Van muy bien!' : 'Retos de hoy'}</h2>
+          <div class="hero-sub">Etapa: ${info.etapa.nombre} · semana ${sem} de vida</div>
+          <div class="racha-chip"><span class="flama">🔥</span> ${rachaDias} día${rachaDias === 1 ? '' : 's'} de racha</div>
+        </div>
+      </div>
+
+      ${fotoLista ? '' : `
+      <div class="tarea especial" style="animation-delay:0s">
+        <span class="t-emoji">📸</span>
+        <div class="t-main">
+          <div class="t-titulo">Foto de la semana ${sem}</div>
+          <div class="t-desc">Su retrato semanal para ver su progreso. ¡La de esta semana aún no está!</div>
+        </div>
+        <button class="t-play" data-accion="foto-semanal" data-sem="${sem}">📷</button>
+      </div>`}
+
+      ${info.tareas.map(t => {
+        const hecha = hechaHoy(t.key);
+        const activa = timers.actividad && timers.actividad.key === t.key;
+        let boton;
+        if (hecha) boton = `<button class="t-check lista" data-tarea="${t.key}">✓</button>`;
+        else if (activa) boton = `<button class="t-check" style="border-style:solid;border-color:#4cc38a;color:#2ea06d;font-size:13px;font-weight:800">⏳</button>`;
+        else if (t.min) boton = `<button class="t-play" data-timer-tarea="${t.key}">▶<small>${t.min} min</small></button>`;
+        else boton = `<button class="t-check" data-tarea="${t.key}">✓</button>`;
+        return `
+        <div class="tarea ${hecha ? 'hecha' : ''}">
+          <span class="t-emoji">${t.emoji}</span>
+          <div class="t-main">
+            ${t.porCondicion ? `<span class="t-cond">por ${esc(t.porCondicion)}</span><br>` : ''}
+            <div class="t-titulo">${esc(t.titulo)}</div>
+            <div class="t-desc">${esc(t.desc)}</div>
+          </div>
+          ${boton}
+        </div>`;
+      }).join('')}
+
+      <h2 class="section-title" style="margin-top:22px">Medallero 🏅</h2>
+      <div class="medallero">
+        ${medallas.map(m => `
+          <div class="medalla ${m.ganada ? 'ganada' : ''}" title="${esc(m.desc)}">
+            <span class="m-emoji">${m.emoji}</span>
+            <span class="m-nombre">${esc(m.nombre)}</span>
+          </div>`).join('')}
+      </div>
+      <p class="disclaimer">Actividades sugeridas según su edad (guías de estimulación temprana AAP/CDC). Siempre con supervisión; cada bebé lleva su propio ritmo. 💗</p>
+    `;
+
+    main.querySelectorAll('[data-tarea]').forEach(b => b.onclick = () => alternarTarea(b.dataset.tarea));
+    main.querySelectorAll('[data-timer-tarea]').forEach(b => b.onclick = () => iniciarActividad(b.dataset.timerTarea));
+  }
+
+  function alternarTarea(key) {
+    const info = tareasHoy();
+    const t = info.tareas.find(x => x.key === key);
+    if (!t) return;
+    const hoy = fechaLocal();
+    const yaHecha = Store.data.actividades.some(a => a.fecha === hoy && a.tarea === key && a.hecha);
+    Store.marcarActividad(hoy, key, t.titulo, !yaHecha);
+    if (!yaHecha) festejarTarea(t);
+  }
+
+  function festejarTarea(t) {
+    confeti(50);
+    toast(`${t.emoji} ¡${t.titulo} lista!`);
+    // ¿día perfecto?
+    setTimeout(() => {
+      const info = tareasHoy();
+      const hoy = fechaLocal();
+      const todas = info.tareas.every(x => Store.data.actividades.some(a => a.fecha === hoy && a.tarea === x.key && a.hecha));
+      if (todas) {
+        confeti(120);
+        celebracion('🌟', '¡Día perfecto!', `Completaron todos los retos de hoy con ${Store.data.bebe.nombre || 'Maya'}`);
+      }
+    }, 350);
+  }
+
+  function iniciarActividad(key) {
+    const timers = Store.getTimers();
+    if (timers.actividad) { toast('Ya hay una actividad en curso'); return; }
+    const info = tareasHoy();
+    const t = info.tareas.find(x => x.key === key);
+    if (!t) return;
+    timers.actividad = { key, titulo: t.titulo, emoji: t.emoji, min: t.min, inicio: new Date().toISOString(), fecha: fechaLocal() };
+    Store.setTimers(timers);
+    toast(`${t.emoji} ${t.titulo} · ${t.min} min ▶`);
+  }
+
+  function terminarActividad(completar) {
+    const timers = Store.getTimers();
+    const act = timers.actividad;
+    if (!act) return;
+    delete timers.actividad;
+    Store.setTimers(timers);
+    if (!completar) { toast('Actividad cancelada'); return; }
+    const seg = Math.round((Date.now() - new Date(act.inicio)) / 1000);
+    Store.marcarActividad(act.fecha, act.key, act.titulo, true, seg);
+    festejarTarea(act);
   }
 
   /* ============================================================
@@ -910,7 +1113,7 @@
     });
   }
 
-  function procesarFoto(file) {
+  function procesarFoto(file, semana) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
@@ -924,18 +1127,33 @@
         canvas.height = Math.round(img.height * escala);
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-        const titulo = prompt('Título de la foto (opcional):') || '';
+        const titulo = semana ? `Semana ${semana} 💗` : (prompt('Título de la foto (opcional):') || '');
         const id = Store.uid();
         Store.add('fotos', {
           id, fecha: new Date().toISOString(), titulo,
           archivo: `${new Date().toISOString().slice(0, 10)}-${id}.jpg`,
           dataUrl, sincronizada: false,
+          ...(semana ? { semana } : {}),
         });
-        toast('Foto guardada 📸');
+        if (semana) {
+          confeti(80);
+          celebracion('📸', `¡Foto de la semana ${semana}!`, 'Su colección de recuerdos va creciendo');
+        } else {
+          toast('Foto guardada 📸');
+        }
       };
       img.src = reader.result;
     };
     reader.readAsDataURL(file);
+  }
+
+  function pedirFotoSemanal(semana) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.onchange = e => procesarFoto(e.target.files[0], semana);
+    input.click();
   }
 
   function verFoto(f) {
@@ -1190,6 +1408,18 @@
           </div>
         </div>`;
     }
+    if (timers.actividad) {
+      const restante = Math.max(0, Math.round(timers.actividad.min * 60 - (Date.now() - new Date(timers.actividad.inicio)) / 1000));
+      html += `
+        <div class="timer-banner actividad">
+          <div class="timer-info">${timers.actividad.emoji} ${esc(timers.actividad.titulo)}
+            <span class="timer-clock">${fmtDur(restante)}</span></div>
+          <div>
+            <button data-accion="act-cancelar">✕</button>
+            <button class="stop" data-accion="act-terminar">✓ Listo</button>
+          </div>
+        </div>`;
+    }
     if (timers.sueno) {
       const seg = Math.floor((Date.now() - new Date(timers.sueno.inicio)) / 1000);
       html += `
@@ -1246,6 +1476,9 @@
       if (a === 'panal-pipi') registrarPanal('pipi');
       if (a === 'panal-popo') registrarPanal('popo');
       if (a === 'panal-mixto') registrarPanal('mixto');
+      if (a === 'act-terminar') terminarActividad(true);
+      if (a === 'act-cancelar') { if (confirm('¿Cancelar la actividad sin marcarla?')) terminarActividad(false); }
+      if (a === 'foto-semanal') pedirFotoSemanal(Number(btn.dataset.sem));
       return;
     }
 
@@ -1309,6 +1542,7 @@
     else if (tabActual === 'comida') renderComida();
     else if (tabActual === 'sueno') renderSueno();
     else if (tabActual === 'panal') renderPanal();
+    else if (tabActual === 'retos') renderRetos();
     else renderMas();
   }
 
@@ -1325,14 +1559,72 @@
     clearInterval(tickInterval);
     tickInterval = setInterval(() => {
       const t = Store.getTimers();
-      if (t.toma || t.sueno) renderTimers();
+      if (t.toma || t.sueno || t.actividad) renderTimers();
+      // cuando el timer de la actividad llega a cero, se marca sola ✅
+      if (t.actividad) {
+        const fin = new Date(t.actividad.inicio).getTime() + t.actividad.min * 60000;
+        if (Date.now() >= fin) terminarActividad(true);
+      }
     }, 1000);
+
+    cargarAvatar();
 
     if (Store.canSync()) {
       await Store.syncNow();
       render();
     }
   }
+
+  /* ---------- avatar y actualizar con un toque ---------- */
+  async function cargarAvatar() {
+    const img = $('#header-avatar');
+    const cache = Store.getAvatarCache();
+    if (cache) { img.src = cache; img.classList.remove('hidden'); }
+    const fresco = await Store.fetchAvatar();
+    if (fresco) { img.src = fresco; img.classList.remove('hidden'); }
+  }
+
+  async function refrescar() {
+    if (!Store.canSync()) { toast('Configura la sincronización en Ajustes'); return; }
+    const img = $('#header-avatar');
+    img.classList.add('girando');
+    toast('Actualizando… 💗');
+    await Store.syncNow();
+    img.classList.remove('girando');
+    toast(Store.syncState === 'ok' ? 'Al día ✅' : 'Sin conexión, se intentará después');
+    render();
+  }
+  $('#header-refresh').addEventListener('click', refrescar);
+
+  /* ---------- deslizar hacia abajo para actualizar ---------- */
+  (() => {
+    const ptr = $('#ptr');
+    let inicioY = null, jalando = false;
+    document.addEventListener('touchstart', e => {
+      if (window.scrollY <= 0 && !$('#app').classList.contains('hidden')) {
+        inicioY = e.touches[0].clientY;
+        jalando = false;
+      } else inicioY = null;
+    }, { passive: true });
+    document.addEventListener('touchmove', e => {
+      if (inicioY === null) return;
+      const delta = e.touches[0].clientY - inicioY;
+      if (delta > 70 && window.scrollY <= 0) {
+        jalando = true;
+        ptr.classList.add('visible');
+      }
+    }, { passive: true });
+    document.addEventListener('touchend', async () => {
+      if (jalando) {
+        ptr.classList.add('girando');
+        await refrescar();
+        ptr.classList.remove('girando');
+      }
+      ptr.classList.remove('visible');
+      inicioY = null;
+      jalando = false;
+    });
+  })();
 
   $('#login-form').addEventListener('submit', async e => {
     e.preventDefault();

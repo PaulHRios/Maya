@@ -352,3 +352,172 @@ canvas.chart { width: 100% !important; }
 @media (min-width: 600px) {
   .app-header, .active-timers { max-width: 560px; margin: 0 auto; }
 }
+
+/* ============ avatar y pull-to-refresh ============ */
+.header-left { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.header-avatar {
+  width: 42px; height: 42px; border-radius: 50%; object-fit: cover;
+  border: 2.5px solid #fff; box-shadow: 0 2px 10px rgba(214,110,152,.3);
+}
+.header-avatar.girando { animation: girar 1s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+
+.ptr {
+  position: fixed; top: calc(8px + var(--safe-top)); left: 50%;
+  transform: translate(-50%, -60px); z-index: 50;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: #fff; box-shadow: var(--shadow);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; transition: transform .2s;
+}
+.ptr.visible { transform: translate(-50%, 10px); }
+.ptr.girando .ptr-spinner { display: inline-block; animation: latir .7s infinite; }
+@keyframes latir { 50% { transform: scale(1.35); } }
+
+/* 6 pestañas: etiquetas un poco más compactas */
+.tab { font-size: 10px; }
+
+/* ============ retos / actividades ============ */
+.retos-hero {
+  border-radius: 26px; padding: 20px;
+  background: linear-gradient(135deg, #ff9ec3 0%, #c79df5 100%);
+  color: #fff; box-shadow: 0 10px 30px rgba(199,157,245,.4);
+  display: flex; align-items: center; gap: 18px; margin-bottom: 16px;
+  animation: hero-in .5s cubic-bezier(.2,.9,.3,1);
+}
+@keyframes hero-in { from { opacity: 0; transform: translateY(14px) scale(.97); } }
+.retos-hero h2 { font-size: 19px; font-weight: 800; margin-bottom: 2px; }
+.retos-hero .hero-sub { font-size: 13px; opacity: .9; }
+.racha-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,.22); border-radius: 100px;
+  padding: 5px 12px; font-size: 13px; font-weight: 800; margin-top: 8px;
+}
+.racha-chip .flama { display: inline-block; animation: flamear 1s infinite alternate; }
+@keyframes flamear { from { transform: scale(1) rotate(-4deg); } to { transform: scale(1.18) rotate(4deg); } }
+
+.anillo { position: relative; width: 86px; height: 86px; flex-shrink: 0; }
+.anillo svg { transform: rotate(-90deg); }
+.anillo circle { fill: none; stroke-width: 8; stroke-linecap: round; }
+.anillo .fondo { stroke: rgba(255,255,255,.25); }
+.anillo .avance { stroke: #fff; transition: stroke-dashoffset .8s cubic-bezier(.2,.9,.3,1); }
+.anillo .num {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  font-size: 19px; font-weight: 800; line-height: 1;
+}
+.anillo .num small { font-size: 10px; font-weight: 700; opacity: .85; }
+
+.tarea {
+  display: flex; align-items: center; gap: 12px;
+  background: #fff; border-radius: 20px; padding: 14px;
+  box-shadow: var(--shadow); margin-bottom: 10px;
+  opacity: 0; animation: tarea-in .45s cubic-bezier(.2,.9,.3,1) forwards;
+}
+.tarea:nth-child(1) { animation-delay: .03s } .tarea:nth-child(2) { animation-delay: .09s }
+.tarea:nth-child(3) { animation-delay: .15s } .tarea:nth-child(4) { animation-delay: .21s }
+.tarea:nth-child(5) { animation-delay: .27s } .tarea:nth-child(6) { animation-delay: .33s }
+.tarea:nth-child(7) { animation-delay: .39s } .tarea:nth-child(8) { animation-delay: .45s }
+@keyframes tarea-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; } }
+
+.tarea .t-emoji {
+  width: 48px; height: 48px; border-radius: 15px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 26px;
+  background: var(--pink-soft);
+}
+.tarea.especial .t-emoji { background: linear-gradient(135deg, #ffe9a8, #ffd166); }
+.tarea .t-main { flex: 1; min-width: 0; }
+.tarea .t-titulo { font-weight: 800; font-size: 15px; }
+.tarea .t-desc { font-size: 12.5px; color: var(--text-2); margin-top: 2px; line-height: 1.35; }
+.tarea .t-cond { display: inline-block; font-size: 10.5px; font-weight: 800; color: #b06a00;
+  background: #fff1d6; border-radius: 100px; padding: 2px 8px; margin-bottom: 3px; }
+
+.t-check {
+  width: 46px; height: 46px; border-radius: 50%; border: 2.5px dashed #e8c9d8;
+  background: none; font-size: 22px; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s; color: transparent;
+}
+.t-check.lista {
+  border: none; background: linear-gradient(135deg, #4cc38a, #2ea06d);
+  color: #fff; animation: pop-check .45s cubic-bezier(.3,1.6,.4,1);
+  box-shadow: 0 4px 14px rgba(76,195,138,.45);
+}
+@keyframes pop-check { 0% { transform: scale(.3) rotate(-30deg); } 70% { transform: scale(1.2) rotate(6deg); } 100% { transform: scale(1); } }
+.t-play {
+  width: 46px; height: 46px; border-radius: 50%; border: none; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--pink), var(--pink-deep)); color: #fff;
+  font-size: 17px; font-weight: 800; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(240,106,155,.4);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1;
+}
+.t-play small { font-size: 8.5px; font-weight: 800; }
+.t-play:active, .t-check:active { transform: scale(.92); }
+.tarea.hecha { opacity: .75 !important; }
+.tarea.hecha .t-titulo { text-decoration: line-through; text-decoration-color: #4cc38a; }
+
+/* timer de actividad en curso */
+.timer-banner.actividad { background: linear-gradient(135deg, #c9f3de, #a8e8c8); }
+.timer-banner.actividad .timer-clock { color: #1d7a4f; }
+
+/* medallas */
+.medallero { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.medalla {
+  background: #fff; border-radius: 18px; padding: 12px 6px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  box-shadow: var(--shadow); text-align: center; position: relative; overflow: hidden;
+}
+.medalla .m-emoji { font-size: 28px; filter: grayscale(1) opacity(.35); }
+.medalla .m-nombre { font-size: 10px; font-weight: 800; color: var(--text-2); }
+.medalla.ganada .m-emoji { filter: none; animation: medalla-pop .5s cubic-bezier(.3,1.6,.4,1); }
+.medalla.ganada .m-nombre { color: var(--text); }
+.medalla.ganada::after {
+  content: ''; position: absolute; top: -60%; left: -70%; width: 50%; height: 220%;
+  background: linear-gradient(105deg, transparent, rgba(255,255,255,.9), transparent);
+  transform: rotate(20deg); animation: brillo 2.8s infinite;
+}
+@keyframes medalla-pop { 0% { transform: scale(.4); } 70% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes brillo { 0% { left: -70%; } 45% { left: 130%; } 100% { left: 130%; } }
+
+/* confeti */
+.confeti {
+  position: fixed; top: -12px; z-index: 80; pointer-events: none;
+  width: 10px; height: 10px; border-radius: 2px;
+  animation: confeti-cae linear forwards;
+}
+@keyframes confeti-cae {
+  to { transform: translateY(105vh) rotate(720deg); opacity: .9; }
+}
+
+/* celebración de día completo */
+.celebracion {
+  position: fixed; inset: 0; z-index: 75; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.celebracion .cele-card {
+  background: #fff; border-radius: 26px; padding: 28px 34px; text-align: center;
+  box-shadow: 0 18px 60px rgba(0,0,0,.25);
+  animation: cele-in .55s cubic-bezier(.3,1.5,.4,1), cele-out .4s ease 2.6s forwards;
+}
+.celebracion .cele-emoji { font-size: 54px; display: block; animation: flamear .8s infinite alternate; }
+.celebracion .cele-texto { font-size: 19px; font-weight: 800; margin-top: 8px; }
+.celebracion .cele-sub { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+@keyframes cele-in { 0% { transform: scale(.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes cele-out { to { transform: scale(.8); opacity: 0; } }
+
+/* tarjeta de foto semanal */
+.foto-semanal {
+  border-radius: 22px; padding: 16px; margin-bottom: 14px;
+  background: linear-gradient(135deg, #fff6e3, #ffe9c7);
+  box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 12px;
+  animation: hero-in .5s cubic-bezier(.2,.9,.3,1);
+}
+.foto-semanal .fs-emoji { font-size: 34px; animation: flamear 1.2s infinite alternate; }
+.foto-semanal .fs-titulo { font-weight: 800; font-size: 15px; }
+.foto-semanal .fs-sub { font-size: 12.5px; color: #9a7430; margin-top: 1px; }
+.foto-semanal button {
+  margin-left: auto; border: none; border-radius: 14px; padding: 11px 16px;
+  background: #2b2330; color: #fff; font-weight: 800; font-size: 13px; cursor: pointer;
+  flex-shrink: 0;
+}

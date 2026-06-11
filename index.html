@@ -35,10 +35,15 @@
 <!-- ====== APP ====== -->
 <div id="app" class="app hidden">
 
+  <div id="ptr" class="ptr"><span class="ptr-spinner">💗</span></div>
+
   <header class="app-header">
-    <div class="header-left">
-      <h1 id="header-title">Maya</h1>
-      <p id="header-sub" class="header-sub"></p>
+    <div class="header-left" id="header-refresh" title="Tocar para sincronizar">
+      <img id="header-avatar" class="header-avatar hidden" alt="">
+      <div>
+        <h1 id="header-title">Maya</h1>
+        <p id="header-sub" class="header-sub"></p>
+      </div>
     </div>
     <div class="header-right">
       <span id="sync-dot" class="sync-dot" title="Sincronización"></span>
@@ -56,6 +61,7 @@
     <button class="tab" data-tab="comida"><span class="tab-icon">🍼</span><span>Comida</span></button>
     <button class="tab" data-tab="sueno"><span class="tab-icon">🌙</span><span>Sueño</span></button>
     <button class="tab" data-tab="panal"><span class="tab-icon">💧</span><span>Pañal</span></button>
+    <button class="tab" data-tab="retos"><span class="tab-icon">🏆</span><span>Retos</span></button>
     <button class="tab" data-tab="mas"><span class="tab-icon">✨</span><span>Más</span></button>
   </nav>
 
@@ -77,6 +83,7 @@
 <script src="js/vendor/jspdf.umd.min.js"></script>
 <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
 <script src="js/store.js"></script>
+<script src="js/actividades.js"></script>
 <script src="js/info.js"></script>
 <script src="js/pdf.js"></script>
 <script src="js/app.js"></script>
