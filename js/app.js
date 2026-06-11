@@ -647,6 +647,60 @@
   ];
   const colorPopo = id => COLORES_POPO.find(c => c.id === id);
 
+  const LECTURA_COLOR = {
+    mostaza: 'Color mostaza: el clásico de bebés que toman leche materna. Normal y saludable. ✅',
+    cafe: 'Café: normal, muy común cuando toman fórmula. ✅',
+    verde: 'Verde: suele ser normal (frecuente con fórmula o tránsito rápido). Si es constante o viene con moco, coméntenlo en la próxima consulta.',
+    negro: 'Negro: normal los primeros días (meconio). Si aparece después de la primera semana, coméntenlo al pediatra.',
+    rojo: 'Tonos rojizos pueden indicar sangre: vale la pena avisar al pediatra pronto. ⚠️',
+    gris: 'Blanco o gris es poco común y amerita avisar al pediatra. ⚠️',
+  };
+
+  /* Análisis en el dispositivo: detecta el color dominante de la foto
+     (ignorando el blanco del pañal) y sugiere la clasificación. */
+  function analizarFotoPopo(dataUrl) {
+    return new Promise(res => {
+      const img = new Image();
+      img.onload = () => {
+        const S = 72;
+        const c = document.createElement('canvas');
+        c.width = S; c.height = S;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, S, S);
+        const px = ctx.getImageData(0, 0, S, S).data;
+        const cuentas = { mostaza: 0, cafe: 0, verde: 0, negro: 0, rojo: 0, gris: 0 };
+        let utiles = 0;
+        for (let i = 0; i < px.length; i += 4) {
+          const r = px[i] / 255, g = px[i + 1] / 255, b = px[i + 2] / 255;
+          const max = Math.max(r, g, b), min = Math.min(r, g, b);
+          const v = max, s = max === 0 ? 0 : (max - min) / max;
+          let h = 0;
+          if (max !== min) {
+            if (max === r) h = 60 * (((g - b) / (max - min)) % 6);
+            else if (max === g) h = 60 * ((b - r) / (max - min) + 2);
+            else h = 60 * ((r - g) / (max - min) + 4);
+          }
+          if (h < 0) h += 360;
+          if (s < 0.13 && v > 0.72) continue; // blanco del pañal / fondo claro
+          utiles++;
+          if (v < 0.16) cuentas.negro++;
+          else if (s < 0.16 && v > 0.45) cuentas.gris++;
+          else if ((h < 14 || h > 338) && s > 0.42) cuentas.rojo++;
+          else if (h >= 14 && h < 42 && v < 0.52) cuentas.cafe++;
+          else if (h >= 32 && h < 72) cuentas.mostaza++;
+          else if (h >= 72 && h < 175) cuentas.verde++;
+          else if (h >= 14 && h < 32) cuentas.cafe++;
+          else cuentas.cafe++;
+        }
+        if (utiles < 80) return res(null); // foto sin suficiente contenido analizable
+        const [color, n] = Object.entries(cuentas).sort((a, b) => b[1] - a[1])[0];
+        res({ color, confianza: Math.round((n / utiles) * 100) });
+      };
+      img.onerror = () => res(null);
+      img.src = dataUrl;
+    });
+  }
+
   function avisoColor(colorId) {
     if (colorId === 'rojo' || colorId === 'gris') {
       setTimeout(() => toast('💡 Ese color vale la pena comentarlo al pediatra'), 1300);
@@ -675,11 +729,19 @@
             <div class="entry-title">${nombre[p.tipo] || p.tipo}${col ? ` <span class="color-dot" style="background:${col.hex}"></span>` : ''}</div>
             ${col || p.notas ? `<div class="entry-sub">${[col && col.nombre, p.notas && esc(p.notas)].filter(Boolean).join(' · ')}</div>` : ''}
           </div>
+          ${p.fotoId ? `<img class="entry-thumb" data-foto-panal="${p.fotoId}" alt="">` : ''}
           <span class="entry-time">${fmtHora(p.hora)}</span>
           ${btnsEntrada('panales', p.id)}
         </div>`;
       }, { emoji: '💧', texto: 'Aquí aparecerán los cambios de pañal' })}
     `;
+
+    main.querySelectorAll('[data-foto-panal]').forEach(async img => {
+      const f = Store.data.fotos.find(x => x.id === img.dataset.fotoPanal);
+      if (!f) { img.remove(); return; }
+      const src = f.dataUrl || await Store.fetchPhoto(f);
+      if (src) { img.src = src; img.onclick = () => verFoto(f); }
+    });
   }
 
   function registrarPanal(tipo) {
@@ -688,25 +750,74 @@
       toast('Pipí 💧 registrado');
       return;
     }
-    // popó o ambos: preguntar el color con un toque
+    // popó o ambos: preguntar el color con un toque (foto opcional con análisis)
+    let fotoPend = null;
     abrirSheet(`
       <h2>${tipo === 'mixto' ? 'Pipí + Popó 🌊' : 'Popó 💩'} · ¿de qué color?</h2>
-      <div class="color-picker">
+      <div class="color-picker" id="pp-colores">
         ${COLORES_POPO.map(c => `
           <button class="color-opt" data-color="${c.id}">
-            <span class="bolita" style="background:${c.hex}"></span>${c.nombre}
+            <span class="bolita" style="background:${c.hex}"></span><span class="cnombre">${c.nombre}</span>
           </button>`).join('')}
       </div>
       <button class="btn-secondary btn-block" id="f-sin-color" style="margin-top:10px">Guardar sin color</button>
+      <div class="form-row" style="margin-top:10px">
+        <button class="btn-ghost" style="flex:1" id="pp-camara">📷 Tomar foto</button>
+        <button class="btn-ghost" style="flex:1" id="pp-carrete">🖼️ Del carrete</button>
+      </div>
+      <div id="pp-analisis"></div>
+      <p class="disclaimer">La foto se analiza aquí mismo en el teléfono y se guarda en su repositorio privado. El análisis del color es aproximado, no un diagnóstico.</p>
     `);
+
     const guardar = colorId => {
-      Store.add('panales', { tipo, hora: new Date().toISOString(), color: colorId, notas: '' });
+      let fotoId = null;
+      if (fotoPend) {
+        fotoId = Store.uid();
+        Store.add('fotos', {
+          id: fotoId, fecha: new Date().toISOString(),
+          titulo: `Pañal ${new Date().toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`,
+          archivo: `${new Date().toISOString().slice(0, 10)}-${fotoId}.jpg`,
+          dataUrl: fotoPend, sincronizada: false, categoria: 'panal',
+        });
+      }
+      Store.add('panales', { tipo, hora: new Date().toISOString(), color: colorId, notas: '', fotoId });
       cerrarSheet();
-      toast(`${tipo === 'mixto' ? 'Pañal completo 🌊' : 'Popó 💩'} registrado`);
+      toast(`${tipo === 'mixto' ? 'Pañal completo 🌊' : 'Popó 💩'} registrado${fotoPend ? ' con foto 📸' : ''}`);
       avisoColor(colorId);
     };
-    document.querySelectorAll('.color-opt').forEach(b => b.onclick = () => guardar(b.dataset.color));
+    document.querySelectorAll('#pp-colores .color-opt').forEach(b => b.onclick = () => guardar(b.dataset.color));
     $('#f-sin-color').onclick = () => guardar(null);
+
+    const agregarFoto = conCamara => {
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/*';
+      if (conCamara) input.capture = 'environment';
+      input.onchange = async e => {
+        const cont = $('#pp-analisis');
+        cont.innerHTML = '<div class="pp-analizando">🔍 Analizando la foto…</div>';
+        fotoPend = await leerFoto(e.target.files[0]).catch(() => null);
+        if (!fotoPend) { cont.innerHTML = ''; toast('No se pudo leer la foto'); return; }
+        const r = await analizarFotoPopo(fotoPend);
+        let texto = 'No pude distinguir bien el color en la foto — elijan el que vean ustedes.';
+        if (r) {
+          texto = `Parece <b>${colorPopo(r.color).nombre.toLowerCase()}</b>. ${LECTURA_COLOR[r.color]}`;
+          document.querySelectorAll('#pp-colores .color-opt').forEach(b => {
+            const sug = b.dataset.color === r.color;
+            b.classList.toggle('sugerido', sug);
+            if (sug) b.querySelector('.cnombre').innerHTML = `✨ ${colorPopo(r.color).nombre}`;
+          });
+        }
+        cont.innerHTML = `
+          <div class="pp-resultado">
+            <img src="${fotoPend}" alt="">
+            <div><b>🔍 Análisis automático</b><br>${texto}<br>
+            <small>Toca el color para guardar el registro con la foto.</small></div>
+          </div>`;
+      };
+      input.click();
+    };
+    $('#pp-camara').onclick = () => agregarFoto(true);
+    $('#pp-carrete').onclick = () => agregarFoto(false);
   }
 
   function hojaPanal(existente) {
@@ -1315,7 +1426,8 @@
 
   /* ---------- Fotos ---------- */
   function renderFotos() {
-    const fotos = [...Store.data.fotos].sort((a, b) => b.fecha.localeCompare(a.fecha));
+    // las fotos de pañal viven en su registro, no en la galería de recuerdos
+    const fotos = Store.data.fotos.filter(f => f.categoria !== 'panal').sort((a, b) => b.fecha.localeCompare(a.fecha));
     main.innerHTML = `
       ${volverMas}
       <h2 class="section-title">Fotos 📸</h2>
@@ -1345,38 +1457,47 @@
     });
   }
 
-  function procesarFoto(file, semana) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        // reducir tamaño para que las fotos sincronicen rápido
-        const MAX = 1280;
-        const escala = Math.min(1, MAX / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * escala);
-        canvas.height = Math.round(img.height * escala);
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-        const titulo = semana != null ? `Semana ${semana} 💗` : (prompt('Título de la foto (opcional):') || '');
-        const id = Store.uid();
-        Store.add('fotos', {
-          id, fecha: new Date().toISOString(), titulo,
-          archivo: `${new Date().toISOString().slice(0, 10)}-${id}.jpg`,
-          dataUrl, sincronizada: false,
-          ...(semana != null ? { semana } : {}),
-        });
-        if (semana != null) {
-          confeti(80);
-          celebracion('📸', `¡Foto de la semana ${semana}!`, 'Su colección de recuerdos va creciendo');
-        } else {
-          toast('Foto guardada 📸');
-        }
+  // lee y reduce una foto a un dataURL listo para guardar/sincronizar
+  function leerFoto(file) {
+    return new Promise((res, rej) => {
+      if (!file) return rej(new Error('sin archivo'));
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 1280;
+          const escala = Math.min(1, MAX / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * escala);
+          canvas.height = Math.round(img.height * escala);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          res(canvas.toDataURL('image/jpeg', 0.82));
+        };
+        img.onerror = rej;
+        img.src = reader.result;
       };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function procesarFoto(file, semana) {
+    if (!file) return;
+    const dataUrl = await leerFoto(file).catch(() => null);
+    if (!dataUrl) { toast('No se pudo leer la foto'); return; }
+    const titulo = semana != null ? `Semana ${semana} 💗` : (prompt('Título de la foto (opcional):') || '');
+    const id = Store.uid();
+    Store.add('fotos', {
+      id, fecha: new Date().toISOString(), titulo,
+      archivo: `${new Date().toISOString().slice(0, 10)}-${id}.jpg`,
+      dataUrl, sincronizada: false,
+      ...(semana != null ? { semana } : {}),
+    });
+    if (semana != null) {
+      confeti(80);
+      celebracion('📸', `¡Foto de la semana ${semana}!`, 'Su colección de recuerdos va creciendo');
+    } else {
+      toast('Foto guardada 📸');
+    }
   }
 
   function pedirFotoSemanal(semana) {
@@ -1773,6 +1894,10 @@
     if (delBtn) {
       const [col, id] = delBtn.dataset.del.split(':');
       if (confirm('¿Borrar este registro?')) {
+        if (col === 'panales') {
+          const p = Store.data.panales.find(x => x.id === id);
+          if (p && p.fotoId) Store.remove('fotos', p.fotoId); // su foto se va con él
+        }
         Store.remove(col, id);
         toast('Registro borrado');
       }
@@ -1854,6 +1979,8 @@
   }
 
   function preguntarDispositivo() {
+    // no interrumpir si ya tienen otra hoja abierta; se preguntará después
+    if (!$('#sheet').classList.contains('hidden')) return;
     const b = Store.data.bebe;
     abrirSheet(`
       <h2>¿De quién es este teléfono? 📱</h2>

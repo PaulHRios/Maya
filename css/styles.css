@@ -601,3 +601,15 @@ canvas.chart { width: 100% !important; }
 }
 .dispositivo-botones button span:first-child { font-size: 34px; }
 .dispositivo-botones button:active { transform: scale(.95); }
+
+/* ============ foto y análisis de popó ============ */
+.color-opt.sugerido { border-color: #f5b54a; background: #fff8e8; animation: pop-check .4s; }
+.pp-analizando { text-align: center; padding: 14px; color: var(--text-2); font-weight: 700; animation: pulse 1s infinite; }
+.pp-resultado {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--blue-soft); border-radius: 16px; padding: 12px; margin-top: 10px;
+  font-size: 13.5px; line-height: 1.45; animation: hero-in .4s;
+}
+.pp-resultado img { width: 64px; height: 64px; object-fit: cover; border-radius: 12px; flex-shrink: 0; }
+.pp-resultado small { color: var(--text-2); }
+.entry-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 10px; cursor: pointer; background: var(--pink-soft); }
