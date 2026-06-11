@@ -171,11 +171,17 @@ const PDFResumen = (() => {
         });
         doc.addImage(img, 'JPEG', 14, y, 182, 91);
         y += 100;
-        y = tabla(doc, y, ['Tipo', 'Inicio', 'Fin', 'Duración', 'Notas'],
+        const quien = { mama: (d.bebe.mama || 'Mamá'), papa: (d.bebe.papa || 'Papá'), ambos: 'Ambos' };
+        y = tabla(doc, y, ['Tipo', 'Inicio', 'Fin', 'Duración', 'Quién', 'Notas'],
           sue.map(s => {
             const min = Math.round((new Date(s.fin) - new Date(s.inicio)) / 60000);
+            const notas = [
+              s.notas,
+              ...(s.bitacora || []).map(n => `${fmtHora(n.hora)} ${n.texto}`),
+            ].filter(Boolean).join(' · ');
             return [s.tipo === 'vigilia' ? 'Vigilia' : 'Sueño',
-              fmtFechaHora(s.inicio), fmtFechaHora(s.fin), `${Math.floor(min / 60)}h ${min % 60}m`, s.notas || ''];
+              fmtFechaHora(s.inicio), fmtFechaHora(s.fin), `${Math.floor(min / 60)}h ${min % 60}m`,
+              quien[s.quien] || '', notas];
           }));
       } else { doc.setFontSize(10); doc.text('Sin registros en este periodo.', 14, y + 6); y += 16; }
     }

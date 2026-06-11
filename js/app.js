@@ -395,37 +395,129 @@
   ============================================================ */
   const esVigilia = s => s.tipo === 'vigilia';
 
+  function nombreQuien(q) {
+    const b = Store.data.bebe;
+    if (q === 'mama') return b.mama || 'Mamá';
+    if (q === 'papa') return b.papa || 'Papá';
+    if (q === 'ambos') return `${b.mama || 'Mamá'} y ${b.papa || 'Papá'}`;
+    return '';
+  }
+
+  const chipsQuien = (sel) => ['mama', 'papa', 'ambos'].map(q =>
+    `<button type="button" class="${sel === q ? 'activo' : ''}" data-quien="${q}">${q === 'ambos' ? '👫 Ambos' : (q === 'mama' ? '👩 ' : '👨 ') + nombreQuien(q)}</button>`).join('');
+
   function renderSueno() {
     const timers = Store.getTimers();
     const grupos = porDia(Store.data.suenos.filter(s => s.fin), 'inicio');
+
+    const cardVigilia = !timers.vigilia ? '' : `
+      <div class="card" style="border-left:5px solid #ffc964">
+        <h2>👁️ Vigilia en curso · bitácora</h2>
+        <label style="font-size:13px;font-weight:700;color:var(--text-2)">¿Quién está despierto con ella?</label>
+        <div class="quien-chips" id="vig-quien">${chipsQuien(timers.vigilia.quien)}</div>
+        <div class="bitacora">
+          ${(timers.vigilia.notas || []).map((n, i) => `
+            <div class="bitacora-item"><b>${fmtHora(n.hora)}</b><span>${esc(n.texto)}</span>
+            <button class="bit-x" data-bit-x="${i}">✕</button></div>`).join('')
+            || '<p style="font-size:13px;color:var(--text-2)">Ve anotando qué pasa: "llora por cólicos", "la cargamos y se calmó", "pusimos música"…</p>'}
+        </div>
+        <div class="vig-add">
+          <input type="text" id="vig-nota" placeholder="¿Qué está pasando?" enterkeyhint="done">
+          <button id="vig-agregar">＋</button>
+        </div>
+      </div>`;
 
     main.innerHTML = `
       <h2 class="section-title">Sueño y vigilia</h2>
       <div class="sueno-botones">
         ${timers.sueno ? `<div class="empty-state" style="padding:14px 6px">🌙 Dormida<br><small>usa la barra de arriba</small></div>`
           : `<button class="bg-lav" data-accion="dormir"><span>😴</span>Se durmió<span class="hint">iniciar timer</span></button>`}
-        ${timers.vigilia ? `<div class="empty-state" style="padding:14px 6px">👁️ En vigilia<br><small>usa la barra de arriba</small></div>`
+        ${timers.vigilia ? `<div class="empty-state" style="padding:14px 6px">👁️ En vigilia<br><small>bitácora aquí abajo ↓</small></div>`
           : `<button class="bg-yellow" data-accion="vigilia"><span>👁️</span>En vigilia<span class="hint">despierta y alerta</span></button>`}
       </div>
+      ${cardVigilia}
       <button class="btn-ghost btn-block" data-accion="sueno-manual">＋ Registrar sueño o vigilia con horario manual</button>
       ${listaEntradas(grupos, s => {
         const ms = new Date(s.fin) - new Date(s.inicio);
         const vig = esVigilia(s);
+        const bit = s.bitacora || [];
         return `
         <div class="entry">
           <span class="entry-emoji">${vig ? '👁️' : '🌙'}</span>
           <div class="entry-main">
             <div class="entry-title">${vig ? 'Vigilia' : 'Durmió'} ${fmtDurLarga(ms)}</div>
-            <div class="entry-sub">${fmtHora(s.inicio)} → ${fmtHora(s.fin)}${s.notas ? ` · ${esc(s.notas)}` : ''}</div>
+            <div class="entry-sub">${fmtHora(s.inicio)} → ${fmtHora(s.fin)}${s.quien ? ` · ${esc(nombreQuien(s.quien))}` : ''}${s.notas ? ` · ${esc(s.notas)}` : ''}</div>
+            ${bit.length ? `<div class="entry-bitacora">${bit.map(n => `<div><b>${fmtHora(n.hora)}</b> ${esc(n.texto)}</div>`).join('')}</div>` : ''}
           </div>
           ${btnsEntrada('suenos', s.id)}
         </div>`;
       }, { emoji: '🌙', texto: 'Aquí aparecerán los sueños y vigilias de Maya' })}
     `;
+
+    if (timers.vigilia) {
+      $('#vig-quien').querySelectorAll('[data-quien]').forEach(b => b.onclick = () => {
+        const t = Store.getTimers();
+        t.vigilia.quien = t.vigilia.quien === b.dataset.quien ? null : b.dataset.quien;
+        Store.setTimers(t);
+      });
+      const agregar = () => {
+        const texto = $('#vig-nota').value.trim();
+        if (!texto) return;
+        agregarNotaVigilia(texto);
+      };
+      $('#vig-agregar').onclick = agregar;
+      $('#vig-nota').addEventListener('keydown', e => { if (e.key === 'Enter') agregar(); });
+      main.querySelectorAll('[data-bit-x]').forEach(b => b.onclick = () => {
+        const t = Store.getTimers();
+        t.vigilia.notas.splice(Number(b.dataset.bitX), 1);
+        Store.setTimers(t);
+      });
+    }
+  }
+
+  function agregarNotaVigilia(texto) {
+    const t = Store.getTimers();
+    if (!t.vigilia) return;
+    t.vigilia.notas = t.vigilia.notas || [];
+    t.vigilia.notas.push({ hora: new Date().toISOString(), texto });
+    Store.setTimers(t);
+    toast('Nota agregada 📝');
+  }
+
+  function hojaNotaVigilia() {
+    abrirSheet(`
+      <h2>Nota de la vigilia 📝</h2>
+      <div class="form-group">
+        <input type="text" id="f-texto" placeholder="Llora por cólicos, la cargué y se calmó…" enterkeyhint="done">
+      </div>
+      <button class="btn-primary btn-block" id="f-guardar">Agregar a la bitácora</button>
+    `);
+    $('#f-texto').focus();
+    $('#f-guardar').onclick = () => {
+      const texto = $('#f-texto').value.trim();
+      if (!texto) return;
+      agregarNotaVigilia(texto);
+      cerrarSheet();
+    };
   }
 
   function hojaSuenoManual(existente) {
     const tipo0 = existente && existente.tipo === 'vigilia' ? 'vigilia' : 'sueno';
+    let quien = existente ? (existente.quien || null) : null;
+    let bitacora = existente ? [...(existente.bitacora || [])] : [];
+
+    const pintarBitacora = () => {
+      const cont = $('#f-bitacora');
+      if (!cont) return;
+      cont.innerHTML = bitacora.map((n, i) => `
+        <div class="bitacora-item"><b>${fmtHora(n.hora)}</b><span>${esc(n.texto)}</span>
+        <button type="button" class="bit-x" data-i="${i}">✕</button></div>`).join('');
+      cont.querySelectorAll('.bit-x').forEach(b => b.onclick = () => {
+        bitacora.splice(Number(b.dataset.i), 1);
+        pintarBitacora();
+      });
+    };
+
     abrirSheet(`
       <h2>${existente ? 'Editar registro' : 'Registro manual 🌙'}</h2>
       <div class="form-group"><label>Tipo</label>
@@ -440,16 +532,51 @@
       <div class="form-group"><label>Fin</label>
         <input type="datetime-local" id="f-fin" value="${aInputLocal(existente ? existente.fin : null)}">
       </div>
+      <div id="f-vigilia-extra" class="${tipo0 === 'vigilia' ? '' : 'hidden'}">
+        <div class="form-group"><label>¿Quién estuvo despierto con ella?</label>
+          <div class="quien-chips" id="f-quien">${chipsQuien(quien)}</div>
+        </div>
+        <div class="form-group"><label>Bitácora</label>
+          <div class="bitacora" id="f-bitacora"></div>
+          <div class="vig-add">
+            <input type="text" id="f-bit-texto" placeholder="Agregar nota a la bitácora…">
+            <button type="button" id="f-bit-agregar">＋</button>
+          </div>
+        </div>
+      </div>
       <div class="form-group"><label>Notas (opcional)</label>
         <input type="text" id="f-notas" value="${esc(existente ? existente.notas : '')}" placeholder="Siesta en su cuna, muy despierta y tranquila…">
       </div>
       <button class="btn-primary btn-block" id="f-guardar">Guardar</button>
     `);
+
+    pintarBitacora();
+    $('#f-tipo').onchange = () =>
+      $('#f-vigilia-extra').classList.toggle('hidden', $('#f-tipo').value !== 'vigilia');
+    $('#f-quien').addEventListener('click', e => {
+      const b = e.target.closest('[data-quien]');
+      if (!b) return;
+      quien = quien === b.dataset.quien ? null : b.dataset.quien;
+      $('#f-quien').innerHTML = chipsQuien(quien);
+    });
+    $('#f-bit-agregar').onclick = () => {
+      const texto = $('#f-bit-texto').value.trim();
+      if (!texto) return;
+      bitacora.push({ hora: new Date().toISOString(), texto });
+      $('#f-bit-texto').value = '';
+      pintarBitacora();
+    };
+
     $('#f-guardar').onclick = () => {
       const inicio = deInputLocal($('#f-inicio').value);
       const fin = deInputLocal($('#f-fin').value);
       if (new Date(fin) <= new Date(inicio)) { toast('La hora de fin debe ser después'); return; }
-      const reg = { tipo: $('#f-tipo').value, inicio, fin, notas: $('#f-notas').value.trim() };
+      const tipo = $('#f-tipo').value;
+      const reg = {
+        tipo, inicio, fin, notas: $('#f-notas').value.trim(),
+        quien: tipo === 'vigilia' ? quien : null,
+        bitacora: tipo === 'vigilia' ? bitacora : [],
+      };
       if (existente) Store.update('suenos', existente.id, reg);
       else Store.add('suenos', reg);
       cerrarSheet();
@@ -479,9 +606,9 @@
   function iniciarVigilia() {
     const timers = Store.getTimers();
     if (timers.vigilia) { toast('Ya hay una vigilia en curso'); return; }
-    timers.vigilia = { inicio: new Date().toISOString() };
+    timers.vigilia = { inicio: new Date().toISOString(), quien: null, notas: [] };
     Store.setTimers(timers);
-    toast('Ojitos bien abiertos 👁️');
+    toast('Ojitos bien abiertos 👁️ · ve anotando en la bitácora');
   }
 
   function terminarVigilia(cancelar) {
@@ -491,7 +618,10 @@
     delete timers.vigilia;
     Store.setTimers(timers);
     if (cancelar) { toast('Registro cancelado'); return; }
-    Store.add('suenos', { tipo: 'vigilia', inicio: v.inicio, fin: new Date().toISOString(), notas: '' });
+    Store.add('suenos', {
+      tipo: 'vigilia', inicio: v.inicio, fin: new Date().toISOString(),
+      quien: v.quien || null, bitacora: v.notas || [], notas: '',
+    });
     toast('Vigilia registrada 👁️');
   }
 
@@ -1544,10 +1674,11 @@
       const seg = Math.floor((Date.now() - new Date(timers.vigilia.inicio)) / 1000);
       html += `
         <div class="timer-banner vigilia">
-          <div class="timer-info">👁️ En vigilia
+          <div class="timer-info">👁️ Vigilia
             <span class="timer-clock">${fmtDur(seg)}</span></div>
           <div>
             <button data-accion="vigilia-cancelar">✕</button>
+            <button data-accion="vigilia-nota">📝</button>
             <button class="stop" data-accion="vigilia-terminar">😴 Terminó</button>
           </div>
         </div>`;
@@ -1596,6 +1727,7 @@
       if (a === 'vigilia') iniciarVigilia();
       if (a === 'vigilia-terminar') terminarVigilia(false);
       if (a === 'vigilia-cancelar') { if (confirm('¿Cancelar sin guardar?')) terminarVigilia(true); }
+      if (a === 'vigilia-nota') hojaNotaVigilia();
       if (a === 'panal-pipi') registrarPanal('pipi');
       if (a === 'panal-popo') registrarPanal('popo');
       if (a === 'panal-mixto') registrarPanal('mixto');

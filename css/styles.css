@@ -549,3 +549,39 @@ canvas.chart { width: 100% !important; }
 .color-opt:active { transform: scale(.95); }
 
 .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid rgba(0,0,0,.12); vertical-align: -1px; }
+
+/* ============ bitácora de vigilia ============ */
+.quien-chips { display: flex; gap: 8px; margin: 6px 0 12px; }
+.quien-chips button {
+  flex: 1; border: none; border-radius: 100px; padding: 10px 6px;
+  font-weight: 700; font-size: 13.5px; cursor: pointer;
+  background: #f3e7ed; color: var(--text-2); transition: all .15s;
+}
+.quien-chips button.activo {
+  background: linear-gradient(135deg, #ffd98c, #ffc964); color: #7a5200;
+  transform: scale(1.04);
+}
+.bitacora { margin: 6px 0 10px; }
+.bitacora-item {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 7px 0; border-bottom: 1px solid #f7ebf1; font-size: 14px;
+}
+.bitacora-item:last-child { border-bottom: none; }
+.bitacora-item b { color: #9a6b00; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 12.5px; }
+.bitacora-item span { flex: 1; }
+.bitacora-item .bit-x { background: none; border: none; cursor: pointer; opacity: .45; font-size: 14px; }
+.vig-add { display: flex; gap: 8px; }
+.vig-add input {
+  flex: 1; padding: 12px 14px; border: 1.5px solid #f0dde7;
+  border-radius: 14px; font-size: 15px; outline: none; background: #fff; color: var(--text);
+}
+.vig-add input:focus { border-color: var(--pink); }
+.vig-add button {
+  border: none; border-radius: 14px; padding: 0 18px;
+  background: var(--pink-deep); color: #fff; font-size: 20px; font-weight: 800; cursor: pointer;
+}
+.entry-bitacora {
+  font-size: 12.5px; color: var(--text-2); margin-top: 5px;
+  border-left: 2.5px solid #ffd98c; padding-left: 8px; line-height: 1.5;
+}
+.entry-bitacora b { color: #9a6b00; font-variant-numeric: tabular-nums; }
