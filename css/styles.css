@@ -521,3 +521,31 @@ canvas.chart { width: 100% !important; }
   background: #2b2330; color: #fff; font-weight: 800; font-size: 13px; cursor: pointer;
   flex-shrink: 0;
 }
+
+/* ============ vigilia y colores de popó ============ */
+.timer-banner.vigilia { background: linear-gradient(135deg, #ffe9b8, #ffd98c); }
+.timer-banner.vigilia .timer-clock { color: #9a6b00; }
+
+.sueno-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
+.sueno-botones button {
+  border: none; border-radius: 22px; padding: 22px 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  font-size: 15px; font-weight: 800; cursor: pointer; box-shadow: var(--shadow);
+  color: var(--text);
+}
+.sueno-botones button span:first-child { font-size: 32px; }
+.sueno-botones button:active { transform: scale(.96); }
+.sueno-botones .hint { font-size: 11.5px; font-weight: 600; color: var(--text-2); }
+
+.color-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 8px 0 4px; }
+.color-opt {
+  border: 2.5px solid transparent; border-radius: 16px; padding: 10px 6px;
+  background: #fff; cursor: pointer; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; color: var(--text);
+}
+.color-opt .bolita { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(0,0,0,.08); }
+.color-opt.activo { border-color: var(--pink-deep); }
+.color-opt:active { transform: scale(.95); }
+
+.color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid rgba(0,0,0,.12); vertical-align: -1px; }

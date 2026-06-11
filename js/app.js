@@ -139,7 +139,7 @@
     const esHoy = iso => new Date(iso).toDateString() === hoy.toDateString();
 
     const ultToma = [...d.tomas].sort((a, b) => b.inicio.localeCompare(a.inicio))[0];
-    const ultSueno = [...d.suenos].filter(s => s.fin).sort((a, b) => b.fin.localeCompare(a.fin))[0];
+    const ultSueno = [...d.suenos].filter(s => s.fin && s.tipo !== 'vigilia').sort((a, b) => b.fin.localeCompare(a.fin))[0];
     const ultPanal = [...d.panales].sort((a, b) => b.hora.localeCompare(a.hora))[0];
 
     const tomasHoy = d.tomas.filter(t => esHoy(t.inicio));
@@ -147,7 +147,7 @@
     const minPechoHoy = Math.round(tomasHoy.reduce((s, t) => s + (t.duracionSeg || 0), 0) / 60);
     const popoHoy = d.panales.filter(p => esHoy(p.hora) && (p.tipo === 'popo' || p.tipo === 'mixto')).length;
     const pipiHoy = d.panales.filter(p => esHoy(p.hora) && (p.tipo === 'pipi' || p.tipo === 'mixto')).length;
-    const msSuenoHoy = d.suenos.filter(s => s.fin && esHoy(s.inicio))
+    const msSuenoHoy = d.suenos.filter(s => s.fin && s.tipo !== 'vigilia' && esHoy(s.inicio))
       .reduce((t, s) => t + (new Date(s.fin) - new Date(s.inicio)), 0);
 
     const nombreTipo = { materno: 'Leche materna', donante: 'Leche donante', formula: 'Fórmula' };
@@ -391,58 +391,69 @@
   }
 
   /* ============================================================
-     SUEÑO
+     SUEÑO Y VIGILIA
   ============================================================ */
+  const esVigilia = s => s.tipo === 'vigilia';
+
   function renderSueno() {
     const timers = Store.getTimers();
     const grupos = porDia(Store.data.suenos.filter(s => s.fin), 'inicio');
 
     main.innerHTML = `
-      <h2 class="section-title">Sueño</h2>
-      ${timers.sueno ? `
-        <div class="empty-state" style="padding:18px">🌙 Maya está dormida — usa la barra morada de arriba cuando despierte.</div>
-      ` : `
-        <button class="btn-primary btn-block" data-accion="dormir" style="padding:20px;font-size:18px">😴 Se durmió ahora</button>
-      `}
-      <button class="btn-ghost btn-block" data-accion="sueno-manual" style="margin-top:8px">＋ Registrar sueño con horario manual</button>
+      <h2 class="section-title">Sueño y vigilia</h2>
+      <div class="sueno-botones">
+        ${timers.sueno ? `<div class="empty-state" style="padding:14px 6px">🌙 Dormida<br><small>usa la barra de arriba</small></div>`
+          : `<button class="bg-lav" data-accion="dormir"><span>😴</span>Se durmió<span class="hint">iniciar timer</span></button>`}
+        ${timers.vigilia ? `<div class="empty-state" style="padding:14px 6px">👁️ En vigilia<br><small>usa la barra de arriba</small></div>`
+          : `<button class="bg-yellow" data-accion="vigilia"><span>👁️</span>En vigilia<span class="hint">despierta y alerta</span></button>`}
+      </div>
+      <button class="btn-ghost btn-block" data-accion="sueno-manual">＋ Registrar sueño o vigilia con horario manual</button>
       ${listaEntradas(grupos, s => {
         const ms = new Date(s.fin) - new Date(s.inicio);
+        const vig = esVigilia(s);
         return `
         <div class="entry">
-          <span class="entry-emoji">🌙</span>
+          <span class="entry-emoji">${vig ? '👁️' : '🌙'}</span>
           <div class="entry-main">
-            <div class="entry-title">Durmió ${fmtDurLarga(ms)}</div>
+            <div class="entry-title">${vig ? 'Vigilia' : 'Durmió'} ${fmtDurLarga(ms)}</div>
             <div class="entry-sub">${fmtHora(s.inicio)} → ${fmtHora(s.fin)}${s.notas ? ` · ${esc(s.notas)}` : ''}</div>
           </div>
           ${btnsEntrada('suenos', s.id)}
         </div>`;
-      }, { emoji: '🌙', texto: 'Aquí aparecerán los sueños de Maya' })}
+      }, { emoji: '🌙', texto: 'Aquí aparecerán los sueños y vigilias de Maya' })}
     `;
   }
 
   function hojaSuenoManual(existente) {
+    const tipo0 = existente && existente.tipo === 'vigilia' ? 'vigilia' : 'sueno';
     abrirSheet(`
-      <h2>${existente ? 'Editar sueño' : 'Registrar sueño 🌙'}</h2>
-      <div class="form-group"><label>Se durmió</label>
+      <h2>${existente ? 'Editar registro' : 'Registro manual 🌙'}</h2>
+      <div class="form-group"><label>Tipo</label>
+        <select id="f-tipo">
+          <option value="sueno" ${tipo0 === 'sueno' ? 'selected' : ''}>😴 Sueño</option>
+          <option value="vigilia" ${tipo0 === 'vigilia' ? 'selected' : ''}>👁️ Vigilia (despierta)</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Inicio</label>
         <input type="datetime-local" id="f-inicio" value="${aInputLocal(existente ? existente.inicio : null)}">
       </div>
-      <div class="form-group"><label>Despertó</label>
+      <div class="form-group"><label>Fin</label>
         <input type="datetime-local" id="f-fin" value="${aInputLocal(existente ? existente.fin : null)}">
       </div>
       <div class="form-group"><label>Notas (opcional)</label>
-        <input type="text" id="f-notas" value="${esc(existente ? existente.notas : '')}" placeholder="Siesta en su cuna…">
+        <input type="text" id="f-notas" value="${esc(existente ? existente.notas : '')}" placeholder="Siesta en su cuna, muy despierta y tranquila…">
       </div>
       <button class="btn-primary btn-block" id="f-guardar">Guardar</button>
     `);
     $('#f-guardar').onclick = () => {
       const inicio = deInputLocal($('#f-inicio').value);
       const fin = deInputLocal($('#f-fin').value);
-      if (new Date(fin) <= new Date(inicio)) { toast('La hora de despertar debe ser después'); return; }
-      const reg = { inicio, fin, notas: $('#f-notas').value.trim() };
+      if (new Date(fin) <= new Date(inicio)) { toast('La hora de fin debe ser después'); return; }
+      const reg = { tipo: $('#f-tipo').value, inicio, fin, notas: $('#f-notas').value.trim() };
       if (existente) Store.update('suenos', existente.id, reg);
       else Store.add('suenos', reg);
       cerrarSheet();
-      toast('Sueño guardado 🌙');
+      toast(reg.tipo === 'vigilia' ? 'Vigilia guardada 👁️' : 'Sueño guardado 🌙');
     };
   }
 
@@ -461,13 +472,48 @@
     delete timers.sueno;
     Store.setTimers(timers);
     if (cancelar) { toast('Registro cancelado'); return; }
-    Store.add('suenos', { inicio: s.inicio, fin: new Date().toISOString(), notas: '' });
+    Store.add('suenos', { tipo: 'sueno', inicio: s.inicio, fin: new Date().toISOString(), notas: '' });
     toast('Sueño registrado 🌙');
+  }
+
+  function iniciarVigilia() {
+    const timers = Store.getTimers();
+    if (timers.vigilia) { toast('Ya hay una vigilia en curso'); return; }
+    timers.vigilia = { inicio: new Date().toISOString() };
+    Store.setTimers(timers);
+    toast('Ojitos bien abiertos 👁️');
+  }
+
+  function terminarVigilia(cancelar) {
+    const timers = Store.getTimers();
+    if (!timers.vigilia) return;
+    const v = timers.vigilia;
+    delete timers.vigilia;
+    Store.setTimers(timers);
+    if (cancelar) { toast('Registro cancelado'); return; }
+    Store.add('suenos', { tipo: 'vigilia', inicio: v.inicio, fin: new Date().toISOString(), notas: '' });
+    toast('Vigilia registrada 👁️');
   }
 
   /* ============================================================
      PAÑAL
   ============================================================ */
+  const COLORES_POPO = [
+    { id: 'mostaza', nombre: 'Mostaza', hex: '#d9a514' },
+    { id: 'cafe', nombre: 'Café', hex: '#8a5a2b' },
+    { id: 'verde', nombre: 'Verde', hex: '#5c8a3a' },
+    { id: 'negro', nombre: 'Negro', hex: '#3b3b3b' },
+    { id: 'rojo', nombre: 'Rojizo', hex: '#c0392b' },
+    { id: 'gris', nombre: 'Blanco/gris', hex: '#cfcabe' },
+  ];
+  const colorPopo = id => COLORES_POPO.find(c => c.id === id);
+
+  function avisoColor(colorId) {
+    if (colorId === 'rojo' || colorId === 'gris') {
+      setTimeout(() => toast('💡 Ese color vale la pena comentarlo al pediatra'), 1300);
+    }
+  }
+
   function renderPanal() {
     const grupos = porDia(Store.data.panales, 'hora');
     const nombre = { pipi: 'Pipí', popo: 'Popó', mixto: 'Pipí + Popó' };
@@ -479,53 +525,98 @@
         <button class="diaper-btn bg-yellow" data-accion="panal-popo"><span>💩</span>Popó</button>
         <button class="diaper-btn bg-mint" data-accion="panal-mixto"><span>🌊</span>Ambos</button>
       </div>
-      <p style="text-align:center;font-size:13px;color:var(--text-2);margin-bottom:6px">Un toque registra el cambio con la hora actual ✨</p>
-      ${listaEntradas(grupos, p => `
+      <p style="text-align:center;font-size:13px;color:var(--text-2);margin-bottom:2px">Pipí se registra al instante; popó pregunta el color ✨</p>
+      <button class="btn-ghost btn-block" data-accion="panal-manual">＋ Registrar con otra hora</button>
+      ${listaEntradas(grupos, p => {
+        const col = colorPopo(p.color);
+        return `
         <div class="entry">
           <span class="entry-emoji">${emoji[p.tipo] || '💧'}</span>
           <div class="entry-main">
-            <div class="entry-title">${nombre[p.tipo] || p.tipo}</div>
-            ${p.notas ? `<div class="entry-sub">${esc(p.notas)}</div>` : ''}
+            <div class="entry-title">${nombre[p.tipo] || p.tipo}${col ? ` <span class="color-dot" style="background:${col.hex}"></span>` : ''}</div>
+            ${col || p.notas ? `<div class="entry-sub">${[col && col.nombre, p.notas && esc(p.notas)].filter(Boolean).join(' · ')}</div>` : ''}
           </div>
           <span class="entry-time">${fmtHora(p.hora)}</span>
           ${btnsEntrada('panales', p.id)}
-        </div>
-      `, { emoji: '💧', texto: 'Aquí aparecerán los cambios de pañal' })}
+        </div>`;
+      }, { emoji: '💧', texto: 'Aquí aparecerán los cambios de pañal' })}
     `;
   }
 
   function registrarPanal(tipo) {
-    Store.add('panales', { tipo, hora: new Date().toISOString(), notas: '' });
-    const nombre = { pipi: 'Pipí 💧', popo: 'Popó 💩', mixto: 'Pañal completo 🌊' };
-    toast(`${nombre[tipo]} registrado`);
+    if (tipo === 'pipi') {
+      Store.add('panales', { tipo, hora: new Date().toISOString(), color: null, notas: '' });
+      toast('Pipí 💧 registrado');
+      return;
+    }
+    // popó o ambos: preguntar el color con un toque
+    abrirSheet(`
+      <h2>${tipo === 'mixto' ? 'Pipí + Popó 🌊' : 'Popó 💩'} · ¿de qué color?</h2>
+      <div class="color-picker">
+        ${COLORES_POPO.map(c => `
+          <button class="color-opt" data-color="${c.id}">
+            <span class="bolita" style="background:${c.hex}"></span>${c.nombre}
+          </button>`).join('')}
+      </div>
+      <button class="btn-secondary btn-block" id="f-sin-color" style="margin-top:10px">Guardar sin color</button>
+    `);
+    const guardar = colorId => {
+      Store.add('panales', { tipo, hora: new Date().toISOString(), color: colorId, notas: '' });
+      cerrarSheet();
+      toast(`${tipo === 'mixto' ? 'Pañal completo 🌊' : 'Popó 💩'} registrado`);
+      avisoColor(colorId);
+    };
+    document.querySelectorAll('.color-opt').forEach(b => b.onclick = () => guardar(b.dataset.color));
+    $('#f-sin-color').onclick = () => guardar(null);
   }
 
   function hojaPanal(existente) {
+    const tipo0 = existente ? existente.tipo : 'pipi';
     abrirSheet(`
-      <h2>Editar pañal</h2>
+      <h2>${existente ? 'Editar pañal' : 'Registrar pañal'}</h2>
       <div class="form-group"><label>Tipo</label>
         <select id="f-tipo">
-          <option value="pipi" ${existente.tipo === 'pipi' ? 'selected' : ''}>💧 Pipí</option>
-          <option value="popo" ${existente.tipo === 'popo' ? 'selected' : ''}>💩 Popó</option>
-          <option value="mixto" ${existente.tipo === 'mixto' ? 'selected' : ''}>🌊 Ambos</option>
+          <option value="pipi" ${tipo0 === 'pipi' ? 'selected' : ''}>💧 Pipí</option>
+          <option value="popo" ${tipo0 === 'popo' ? 'selected' : ''}>💩 Popó</option>
+          <option value="mixto" ${tipo0 === 'mixto' ? 'selected' : ''}>🌊 Ambos</option>
         </select>
       </div>
-      <div class="form-group"><label>Hora</label>
-        <input type="datetime-local" id="f-hora" value="${aInputLocal(existente.hora)}">
+      <div id="f-color-grupo" class="form-group ${tipo0 === 'pipi' ? 'hidden' : ''}"><label>Color de la popó</label>
+        <div class="color-picker">
+          ${COLORES_POPO.map(c => `
+            <button type="button" class="color-opt ${existente && existente.color === c.id ? 'activo' : ''}" data-color="${c.id}">
+              <span class="bolita" style="background:${c.hex}"></span>${c.nombre}
+            </button>`).join('')}
+        </div>
       </div>
-      <div class="form-group"><label>Notas (color, consistencia…)</label>
-        <input type="text" id="f-notas" value="${esc(existente.notas)}" placeholder="Amarilla, semilla, abundante…">
+      <div class="form-group"><label>Hora</label>
+        <input type="datetime-local" id="f-hora" value="${aInputLocal(existente ? existente.hora : null)}">
+      </div>
+      <div class="form-group"><label>Notas (consistencia, cantidad…)</label>
+        <input type="text" id="f-notas" value="${esc(existente ? existente.notas : '')}" placeholder="Aguada, con semillitas, abundante…">
       </div>
       <button class="btn-primary btn-block" id="f-guardar">Guardar</button>
     `);
+    let color = existente ? existente.color : null;
+    document.querySelectorAll('#f-color-grupo .color-opt').forEach(b => b.onclick = () => {
+      color = color === b.dataset.color ? null : b.dataset.color; // tocar de nuevo lo quita
+      document.querySelectorAll('#f-color-grupo .color-opt').forEach(x =>
+        x.classList.toggle('activo', x.dataset.color === color));
+    });
+    $('#f-tipo').onchange = () =>
+      $('#f-color-grupo').classList.toggle('hidden', $('#f-tipo').value === 'pipi');
     $('#f-guardar').onclick = () => {
-      Store.update('panales', existente.id, {
+      const reg = {
         tipo: $('#f-tipo').value,
+        color: $('#f-tipo').value === 'pipi' ? null : color,
         hora: deInputLocal($('#f-hora').value),
         notas: $('#f-notas').value.trim(),
-      });
+      };
+      if (existente) Store.update('panales', existente.id, reg);
+      else Store.add('panales', reg);
       cerrarSheet();
-      toast('Pañal actualizado');
+      toast(existente ? 'Pañal actualizado' : 'Pañal registrado');
+      avisoColor(reg.color);
     };
   }
 
@@ -1449,6 +1540,18 @@
           </div>
         </div>`;
     }
+    if (timers.vigilia) {
+      const seg = Math.floor((Date.now() - new Date(timers.vigilia.inicio)) / 1000);
+      html += `
+        <div class="timer-banner vigilia">
+          <div class="timer-info">👁️ En vigilia
+            <span class="timer-clock">${fmtDur(seg)}</span></div>
+          <div>
+            <button data-accion="vigilia-cancelar">✕</button>
+            <button class="stop" data-accion="vigilia-terminar">😴 Terminó</button>
+          </div>
+        </div>`;
+    }
     cont.innerHTML = html;
     actualizarWakeLock();
   }
@@ -1490,9 +1593,13 @@
       if (a === 'sueno-terminar') terminarSueno(false);
       if (a === 'sueno-cancelar') { if (confirm('¿Cancelar sin guardar?')) terminarSueno(true); }
       if (a === 'sueno-manual') hojaSuenoManual();
+      if (a === 'vigilia') iniciarVigilia();
+      if (a === 'vigilia-terminar') terminarVigilia(false);
+      if (a === 'vigilia-cancelar') { if (confirm('¿Cancelar sin guardar?')) terminarVigilia(true); }
       if (a === 'panal-pipi') registrarPanal('pipi');
       if (a === 'panal-popo') registrarPanal('popo');
       if (a === 'panal-mixto') registrarPanal('mixto');
+      if (a === 'panal-manual') hojaPanal(null);
       if (a === 'act-terminar') terminarActividad(true);
       if (a === 'act-cancelar') { if (confirm('¿Cancelar la actividad sin marcarla?')) terminarActividad(false); }
       if (a === 'foto-semanal') pedirFotoSemanal(Number(btn.dataset.sem));
@@ -1576,7 +1683,7 @@
     clearInterval(tickInterval);
     tickInterval = setInterval(() => {
       const t = Store.getTimers();
-      if (t.toma || t.sueno || t.actividad) renderTimers();
+      if (t.toma || t.sueno || t.actividad || t.vigilia) renderTimers();
       // cuando el timer de la actividad llega a cero, se marca sola ✅
       if (t.actividad) {
         const fin = new Date(t.actividad.inicio).getTime() + t.actividad.min * 60000;

@@ -147,18 +147,20 @@ const PDFResumen = (() => {
         doc.addImage(img, 'JPEG', 14, y, 182, 91);
         y += 100;
         const nombre = { pipi: 'Pipí', popo: 'Popó', mixto: 'Pipí + Popó' };
-        y = tabla(doc, y, ['Fecha', 'Hora', 'Tipo', 'Notas'],
-          pan.map(p => [fmtFecha(p.hora), fmtHora(p.hora), nombre[p.tipo] || p.tipo, p.notas || '']));
+        const nombreColor = { mostaza: 'Mostaza', cafe: 'Café', verde: 'Verde', negro: 'Negro', rojo: 'Rojizo', gris: 'Blanco/gris' };
+        y = tabla(doc, y, ['Fecha', 'Hora', 'Tipo', 'Color', 'Notas'],
+          pan.map(p => [fmtFecha(p.hora), fmtHora(p.hora), nombre[p.tipo] || p.tipo, nombreColor[p.color] || '', p.notas || '']));
       } else { doc.setFontSize(10); doc.text('Sin registros en este periodo.', 14, y + 6); y += 16; }
     }
 
     /* ---- Sueño ---- */
     if (secciones.suenos) {
       const sue = d.suenos.filter(s => enRango(s.inicio) && s.fin).sort((a, b) => a.inicio.localeCompare(b.inicio));
-      y = encabezadoSeccion(doc, y, 'Sueño');
+      y = encabezadoSeccion(doc, y, 'Sueño y vigilia');
       if (sue.length) {
+        const soloSueno = sue.filter(s => s.tipo !== 'vigilia');
         const horasPorDia = dias.map(dia =>
-          Math.round(sue.filter(s => mismoDia(s.inicio, dia))
+          Math.round(soloSueno.filter(s => mismoDia(s.inicio, dia))
             .reduce((t, s) => t + (new Date(s.fin) - new Date(s.inicio)), 0) / 36000) / 100);
         const img = await chartImg({
           type: 'bar',
@@ -169,10 +171,11 @@ const PDFResumen = (() => {
         });
         doc.addImage(img, 'JPEG', 14, y, 182, 91);
         y += 100;
-        y = tabla(doc, y, ['Se durmió', 'Despertó', 'Duración', 'Notas'],
+        y = tabla(doc, y, ['Tipo', 'Inicio', 'Fin', 'Duración', 'Notas'],
           sue.map(s => {
             const min = Math.round((new Date(s.fin) - new Date(s.inicio)) / 60000);
-            return [fmtFechaHora(s.inicio), fmtFechaHora(s.fin), `${Math.floor(min / 60)}h ${min % 60}m`, s.notas || ''];
+            return [s.tipo === 'vigilia' ? 'Vigilia' : 'Sueño',
+              fmtFechaHora(s.inicio), fmtFechaHora(s.fin), `${Math.floor(min / 60)}h ${min % 60}m`, s.notas || ''];
           }));
       } else { doc.setFontSize(10); doc.text('Sin registros en este periodo.', 14, y + 6); y += 16; }
     }
