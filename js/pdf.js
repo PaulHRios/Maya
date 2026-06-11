@@ -114,7 +114,7 @@ const PDFResumen = (() => {
         });
         doc.addImage(img, 'JPEG', 14, y, 182, 91);
         y += 100;
-        const nombreTipo = { materno: 'Materna', donante: 'Donante', formula: 'Fórmula' };
+        const nombreTipo = { materno: 'Materna', donante: 'Extraída', formula: 'Fórmula' };
         y = tabla(doc, y, ['Fecha y hora', 'Tipo', 'Lado', 'Duración', 'ml', 'Notas'],
           tomas.map(t => [
             fmtFechaHora(t.inicio),

@@ -150,7 +150,7 @@
     const msSuenoHoy = d.suenos.filter(s => s.fin && s.tipo !== 'vigilia' && esHoy(s.inicio))
       .reduce((t, s) => t + (new Date(s.fin) - new Date(s.inicio)), 0);
 
-    const nombreTipo = { materno: 'Leche materna', donante: 'Leche donante', formula: 'Fórmula' };
+    const nombreTipo = { materno: 'Leche materna', donante: 'Leche extraída', formula: 'Fórmula' };
     const descToma = t => {
       if (!t) return 'Aún sin registros';
       const partes = [nombreTipo[t.tipo]];
@@ -235,7 +235,7 @@
   function renderComida() {
     const timers = Store.getTimers();
     const d = Store.data;
-    const nombreTipo = { materno: 'Materna', donante: 'Donante', formula: 'Fórmula' };
+    const nombreTipo = { materno: 'Materna', donante: 'Extraída', formula: 'Fórmula' };
 
     let panel = '';
     if (tipoComida === 'materno') {
@@ -253,7 +253,7 @@
         <button class="btn-ghost btn-block" data-accion="toma-manual">＋ Registrar toma de pecho sin timer</button>
       `;
     } else {
-      panel = `<button class="btn-primary btn-block" data-accion="biberon-tipo">＋ Registrar ${tipoComida === 'donante' ? 'leche donante' : 'fórmula'}</button>`;
+      panel = `<button class="btn-primary btn-block" data-accion="biberon-tipo">＋ Registrar ${tipoComida === 'donante' ? 'leche extraída' : 'fórmula'}</button>`;
     }
 
     const grupos = porDia(d.tomas, 'inicio');
@@ -261,13 +261,13 @@
       <h2 class="section-title">Alimentación</h2>
       <div class="segmented" id="seg-comida">
         <button data-tipo="materno" class="${tipoComida === 'materno' ? 'active' : ''}">🤱 Materna</button>
-        <button data-tipo="donante" class="${tipoComida === 'donante' ? 'active' : ''}">💝 Donante</button>
+        <button data-tipo="donante" class="${tipoComida === 'donante' ? 'active' : ''}">🥛 Extraída</button>
         <button data-tipo="formula" class="${tipoComida === 'formula' ? 'active' : ''}">🍼 Fórmula</button>
       </div>
       ${panel}
       ${listaEntradas(grupos, t => `
         <div class="entry">
-          <span class="entry-emoji">${t.tipo === 'materno' ? '🤱' : t.tipo === 'donante' ? '💝' : '🍼'}</span>
+          <span class="entry-emoji">${t.tipo === 'materno' ? '🤱' : t.tipo === 'donante' ? '🥛' : '🍼'}</span>
           <div class="entry-main">
             <div class="entry-title">${nombreTipo[t.tipo]}${t.lado ? ` · ${t.lado === 'izq' ? 'izquierda' : 'derecha'}` : ''}</div>
             <div class="entry-sub">${[t.duracionSeg ? `${Math.round(t.duracionSeg / 60)} min` : '', t.ml ? `${t.ml} ml` : '', t.notas ? esc(t.notas) : ''].filter(Boolean).join(' · ') || '—'}</div>
@@ -287,7 +287,7 @@
   function hojaBiberon(tipo, existente) {
     const ml0 = existente ? (existente.ml || 60) : 60;
     abrirSheet(`
-      <h2>${existente ? 'Editar toma' : tipo === 'donante' ? 'Leche donante 💝' : tipo === 'formula' ? 'Fórmula 🍼' : 'Toma de pecho 🤱'}</h2>
+      <h2>${existente ? 'Editar toma' : tipo === 'donante' ? 'Leche extraída 🥛' : tipo === 'formula' ? 'Fórmula 🍼' : 'Toma de pecho 🤱'}</h2>
       ${tipo === 'materno' ? `
         <div class="form-group"><label>Lado</label>
           <select id="f-lado">
@@ -457,7 +457,13 @@
     if (timers.vigilia) {
       $('#vig-quien').querySelectorAll('[data-quien]').forEach(b => b.onclick = () => {
         const t = Store.getTimers();
-        t.vigilia.quien = t.vigilia.quien === b.dataset.quien ? null : b.dataset.quien;
+        const nuevo = t.vigilia.quien === b.dataset.quien ? null : b.dataset.quien;
+        // cada relevo queda en la bitácora con su hora
+        if (nuevo && nuevo !== t.vigilia.quien) {
+          t.vigilia.notas = t.vigilia.notas || [];
+          t.vigilia.notas.push({ hora: new Date().toISOString(), texto: `🔄 Ahora con ella: ${nombreQuien(nuevo)}` });
+        }
+        t.vigilia.quien = nuevo;
         Store.setTimers(t);
       });
       const agregar = () => {
