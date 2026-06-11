@@ -656,6 +656,31 @@
     gris: 'Blanco o gris es poco común y amerita avisar al pediatra. ⚠️',
   };
 
+  const CONSISTENCIAS = [
+    { id: 'liquida', nombre: 'Aguada', emoji: '💦' },
+    { id: 'cremosa', nombre: 'Cremosa', emoji: '🍦' },
+    { id: 'grumitos', nombre: 'Con grumitos', emoji: '🌾' },
+    { id: 'pastosa', nombre: 'Pastosa', emoji: '🥜' },
+    { id: 'dura', nombre: 'Bolitas duras', emoji: '🪨' },
+  ];
+  const consistenciaPopo = id => CONSISTENCIAS.find(c => c.id === id);
+
+  const LECTURA_CONSISTENCIA = {
+    liquida: 'Aguada: una que otra es normal; si son varias seguidas y muy líquidas puede ser diarrea — vigilen que siga comiendo bien y mojando pañales.',
+    cremosa: 'Cremosa: la consistencia típica y saludable.',
+    grumitos: 'Con grumitos o "semillitas": el clásico de la lactancia materna, totalmente normal.',
+    pastosa: 'Pastosa: normal, común cuando toman fórmula.',
+    dura: 'Bolitas duras y secas sugieren estreñimiento; si se repite, coméntenlo al pediatra.',
+  };
+
+  function lecturaCombinada(colorId, consId) {
+    const partes = [];
+    if (colorId && LECTURA_COLOR[colorId]) partes.push(`🎨 ${LECTURA_COLOR[colorId]}`);
+    if (consId && LECTURA_CONSISTENCIA[consId]) partes.push(`🥣 ${LECTURA_CONSISTENCIA[consId]}`);
+    if (!partes.length) return 'Elijan color y consistencia para ver la lectura.';
+    return partes.join('<br><br>');
+  }
+
   /* Análisis en el dispositivo: detecta el color dominante de la foto
      (ignorando el blanco del pañal) y sugiere la clasificación. */
   function analizarFotoPopo(dataUrl) {
@@ -669,9 +694,13 @@
         ctx.drawImage(img, 0, 0, S, S);
         const px = ctx.getImageData(0, 0, S, S).data;
         const cuentas = { mostaza: 0, cafe: 0, verde: 0, negro: 0, rojo: 0, gris: 0 };
+        const mascara = new Array(S * S).fill(false);
+        const lum = new Array(S * S).fill(0);
         let utiles = 0;
         for (let i = 0; i < px.length; i += 4) {
+          const idx = i / 4;
           const r = px[i] / 255, g = px[i + 1] / 255, b = px[i + 2] / 255;
+          lum[idx] = 0.299 * r + 0.587 * g + 0.114 * b;
           const max = Math.max(r, g, b), min = Math.min(r, g, b);
           const v = max, s = max === 0 ? 0 : (max - min) / max;
           let h = 0;
@@ -682,6 +711,7 @@
           }
           if (h < 0) h += 360;
           if (s < 0.13 && v > 0.72) continue; // blanco del pañal / fondo claro
+          mascara[idx] = true;
           utiles++;
           if (v < 0.16) cuentas.negro++;
           else if (s < 0.16 && v > 0.45) cuentas.gris++;
@@ -694,7 +724,26 @@
         }
         if (utiles < 80) return res(null); // foto sin suficiente contenido analizable
         const [color, n] = Object.entries(cuentas).sort((a, b) => b[1] - a[1])[0];
-        res({ color, confianza: Math.round((n / utiles) * 100) });
+
+        // consistencia: textura (cambios bruscos de luz dentro de la mancha)
+        // y qué tan extendida está respecto a la foto
+        let bordes = 0, pares = 0;
+        for (let yy = 0; yy < S - 1; yy++) {
+          for (let xx = 0; xx < S - 1; xx++) {
+            const idx = yy * S + xx;
+            if (!mascara[idx]) continue;
+            if (mascara[idx + 1]) { pares++; if (Math.abs(lum[idx] - lum[idx + 1]) > 0.13) bordes++; }
+            if (mascara[idx + S]) { pares++; if (Math.abs(lum[idx] - lum[idx + S]) > 0.13) bordes++; }
+          }
+        }
+        const textura = pares ? bordes / pares : 0;
+        const extension = utiles / (S * S);
+        let consistencia = 'cremosa';
+        if (textura > 0.16) consistencia = 'grumitos';
+        else if (extension > 0.5 && textura < 0.06) consistencia = 'liquida';
+        else if (extension < 0.12 && textura > 0.08) consistencia = 'dura';
+
+        res({ color, confianza: Math.round((n / utiles) * 100), consistencia });
       };
       img.onerror = () => res(null);
       img.src = dataUrl;
@@ -722,12 +771,13 @@
       <button class="btn-ghost btn-block" data-accion="panal-manual">＋ Registrar con otra hora</button>
       ${listaEntradas(grupos, p => {
         const col = colorPopo(p.color);
+        const cons = consistenciaPopo(p.consistencia);
         return `
         <div class="entry">
           <span class="entry-emoji">${emoji[p.tipo] || '💧'}</span>
           <div class="entry-main">
             <div class="entry-title">${nombre[p.tipo] || p.tipo}${col ? ` <span class="color-dot" style="background:${col.hex}"></span>` : ''}</div>
-            ${col || p.notas ? `<div class="entry-sub">${[col && col.nombre, p.notas && esc(p.notas)].filter(Boolean).join(' · ')}</div>` : ''}
+            ${col || cons || p.notas ? `<div class="entry-sub">${[col && col.nombre, cons && cons.nombre.toLowerCase(), p.notas && esc(p.notas)].filter(Boolean).join(' · ')}</div>` : ''}
           </div>
           ${p.fotoId ? `<img class="entry-thumb" data-foto-panal="${p.fotoId}" alt="">` : ''}
           <span class="entry-time">${fmtHora(p.hora)}</span>
@@ -739,8 +789,9 @@
     main.querySelectorAll('[data-foto-panal]').forEach(async img => {
       const f = Store.data.fotos.find(x => x.id === img.dataset.fotoPanal);
       if (!f) { img.remove(); return; }
+      const p = Store.data.panales.find(x => x.fotoId === f.id);
       const src = f.dataUrl || await Store.fetchPhoto(f);
-      if (src) { img.src = src; img.onclick = () => verFoto(f); }
+      if (src) { img.src = src; img.onclick = () => hojaAnalisisPanal(p); }
     });
   }
 
@@ -769,6 +820,7 @@
       <p class="disclaimer">La foto se analiza aquí mismo en el teléfono y se guarda en su repositorio privado. El análisis del color es aproximado, no un diagnóstico.</p>
     `);
 
+    let consDetectada = null;
     const guardar = colorId => {
       let fotoId = null;
       if (fotoPend) {
@@ -780,7 +832,7 @@
           dataUrl: fotoPend, sincronizada: false, categoria: 'panal',
         });
       }
-      Store.add('panales', { tipo, hora: new Date().toISOString(), color: colorId, notas: '', fotoId });
+      Store.add('panales', { tipo, hora: new Date().toISOString(), color: colorId, consistencia: consDetectada, notas: '', fotoId });
       cerrarSheet();
       toast(`${tipo === 'mixto' ? 'Pañal completo 🌊' : 'Popó 💩'} registrado${fotoPend ? ' con foto 📸' : ''}`);
       avisoColor(colorId);
@@ -800,7 +852,9 @@
         const r = await analizarFotoPopo(fotoPend);
         let texto = 'No pude distinguir bien el color en la foto — elijan el que vean ustedes.';
         if (r) {
-          texto = `Parece <b>${colorPopo(r.color).nombre.toLowerCase()}</b>. ${LECTURA_COLOR[r.color]}`;
+          consDetectada = r.consistencia || null;
+          const cons = consistenciaPopo(r.consistencia);
+          texto = `Parece <b>${colorPopo(r.color).nombre.toLowerCase()}</b>${cons ? ` y de consistencia <b>${cons.nombre.toLowerCase()}</b>` : ''}. ${LECTURA_COLOR[r.color]}${r.consistencia ? `<br>${LECTURA_CONSISTENCIA[r.consistencia]}` : ''}`;
           document.querySelectorAll('#pp-colores .color-opt').forEach(b => {
             const sug = b.dataset.color === r.color;
             b.classList.toggle('sugerido', sug);
@@ -818,6 +872,97 @@
     };
     $('#pp-camara').onclick = () => agregarFoto(true);
     $('#pp-carrete').onclick = () => agregarFoto(false);
+  }
+
+  /* análisis de una foto de pañal ya guardada: el color que definió el
+     usuario manda; si no hay, se usa el detectado. La consistencia se
+     estima por textura y se puede corregir. */
+  async function hojaAnalisisPanal(p) {
+    const foto = Store.data.fotos.find(x => x.id === p.fotoId);
+    if (!foto) { toast('Este registro no tiene foto'); return; }
+
+    let sel = { color: p.color || null, cons: p.consistencia || null };
+    let detectado = null;
+
+    abrirSheet(`
+      <h2>Análisis del pañal 🔍</h2>
+      <img id="an-img" style="width:100%;max-height:280px;object-fit:contain;border-radius:16px;background:#2b233010" alt="">
+      <div class="pp-analizando" id="an-status">Cargando foto…</div>
+      <div class="form-group" style="margin-top:8px"><label id="an-lbl-color">Color</label>
+        <div class="color-picker" id="an-colores">
+          ${COLORES_POPO.map(c => `
+            <button type="button" class="color-opt" data-color="${c.id}">
+              <span class="bolita" style="background:${c.hex}"></span><span class="cnombre">${c.nombre}</span>
+            </button>`).join('')}
+        </div>
+      </div>
+      <div class="form-group"><label id="an-lbl-cons">Consistencia</label>
+        <div class="color-picker" id="an-cons">
+          ${CONSISTENCIAS.map(c => `
+            <button type="button" class="color-opt" data-cons="${c.id}">
+              <span style="font-size:24px">${c.emoji}</span><span class="cnombre">${c.nombre}</span>
+            </button>`).join('')}
+        </div>
+      </div>
+      <div class="info-box" id="an-lectura"></div>
+      <button class="btn-primary btn-block" id="an-guardar" style="margin-top:12px">Guardar</button>
+      <button class="btn-ghost btn-block" id="an-borrar" style="color:var(--danger)">🗑️ Borrar la foto de este registro</button>
+      <p class="disclaimer">Análisis aproximado hecho en el teléfono; no sustituye la valoración del pediatra.</p>
+    `);
+
+    const pintar = () => {
+      const colorEf = sel.color || (detectado && detectado.color) || null;
+      const consEf = sel.cons || (detectado && detectado.consistencia) || null;
+      document.querySelectorAll('#an-colores .color-opt').forEach(b => {
+        b.classList.toggle('activo', b.dataset.color === sel.color);
+        const esSug = !sel.color && detectado && b.dataset.color === detectado.color;
+        b.classList.toggle('sugerido', esSug);
+        b.querySelector('.cnombre').textContent = (esSug ? '✨ ' : '') + colorPopo(b.dataset.color).nombre;
+      });
+      document.querySelectorAll('#an-cons .color-opt').forEach(b => {
+        b.classList.toggle('activo', b.dataset.cons === sel.cons);
+        const esSug = !sel.cons && detectado && b.dataset.cons === detectado.consistencia;
+        b.classList.toggle('sugerido', esSug);
+        b.querySelector('.cnombre').textContent = (esSug ? '✨ ' : '') + consistenciaPopo(b.dataset.cons).nombre;
+      });
+      $('#an-lbl-color').textContent = sel.color ? 'Color (definido por ustedes)' : 'Color (✨ = lo que veo en la foto)';
+      $('#an-lbl-cons').textContent = sel.cons ? 'Consistencia (definida por ustedes)' : 'Consistencia (✨ = lo que veo en la foto)';
+      $('#an-lectura').innerHTML = `<h4>🔍 Lectura</h4>${lecturaCombinada(colorEf, consEf)}`;
+    };
+
+    document.querySelectorAll('#an-colores .color-opt').forEach(b => b.onclick = () => {
+      sel.color = sel.color === b.dataset.color ? null : b.dataset.color;
+      pintar();
+    });
+    document.querySelectorAll('#an-cons .color-opt').forEach(b => b.onclick = () => {
+      sel.cons = sel.cons === b.dataset.cons ? null : b.dataset.cons;
+      pintar();
+    });
+
+    $('#an-guardar').onclick = () => {
+      const colorEf = sel.color || (detectado && detectado.color) || null;
+      const consEf = sel.cons || (detectado && detectado.consistencia) || null;
+      Store.update('panales', p.id, { color: colorEf, consistencia: consEf });
+      cerrarSheet();
+      toast('Análisis guardado 🔍');
+      avisoColor(colorEf);
+    };
+    $('#an-borrar').onclick = () => {
+      if (!confirm('¿Borrar la foto? El registro del pañal se conserva.')) return;
+      Store.remove('fotos', foto.id);
+      Store.update('panales', p.id, { fotoId: null });
+      cerrarSheet();
+      toast('Foto borrada');
+    };
+
+    // cargar la foto y analizarla
+    const src = foto.dataUrl || await Store.fetchPhoto(foto);
+    if (!src) { $('#an-status').textContent = 'No se pudo cargar la foto (¿sin conexión?)'; pintar(); return; }
+    $('#an-img').src = src;
+    $('#an-status').textContent = '🔍 Analizando…';
+    detectado = await analizarFotoPopo(src);
+    $('#an-status').remove();
+    pintar();
   }
 
   function hojaPanal(existente) {

@@ -148,8 +148,10 @@ const PDFResumen = (() => {
         y += 100;
         const nombre = { pipi: 'Pipí', popo: 'Popó', mixto: 'Pipí + Popó' };
         const nombreColor = { mostaza: 'Mostaza', cafe: 'Café', verde: 'Verde', negro: 'Negro', rojo: 'Rojizo', gris: 'Blanco/gris' };
-        y = tabla(doc, y, ['Fecha', 'Hora', 'Tipo', 'Color', 'Notas'],
-          pan.map(p => [fmtFecha(p.hora), fmtHora(p.hora), nombre[p.tipo] || p.tipo, nombreColor[p.color] || '', p.notas || '']));
+        const nombreCons = { liquida: 'Aguada', cremosa: 'Cremosa', grumitos: 'Con grumitos', pastosa: 'Pastosa', dura: 'Bolitas duras' };
+        y = tabla(doc, y, ['Fecha', 'Hora', 'Tipo', 'Color', 'Consistencia', 'Notas'],
+          pan.map(p => [fmtFecha(p.hora), fmtHora(p.hora), nombre[p.tipo] || p.tipo,
+            nombreColor[p.color] || '', nombreCons[p.consistencia] || '', p.notas || '']));
       } else { doc.setFontSize(10); doc.text('Sin registros en este periodo.', 14, y + 6); y += 16; }
     }
 
