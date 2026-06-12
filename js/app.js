@@ -195,7 +195,9 @@
         </div>
       </div>
 
-      <div class="card" style="margin-top:14px">
+      <div style="margin-top:14px">${bancoCardInicio()}</div>
+
+      <div class="card">
         <h2>Última toma</h2>
         <div class="card-row">
           <div>
@@ -348,10 +350,16 @@
         registro.ml = ml;
         registro.lado = null;
       }
-      if (existente) Store.update('tomas', existente.id, registro);
-      else Store.add('tomas', registro);
+      const guardada = existente
+        ? Store.update('tomas', existente.id, registro)
+        : Store.add('tomas', registro);
+      sincronizarConsumoBanco(guardada); // la leche extraída se resta del refri
       cerrarSheet();
       toast(existente ? 'Toma actualizada' : 'Toma guardada 🍼');
+      if (registro.tipo === 'donante') {
+        const { refri } = saldosBanco();
+        setTimeout(() => toast(`🥛 Quedan ${refri} ml listos en el refri`), 1400);
+      }
     };
   }
 
@@ -1250,9 +1258,236 @@
   }
 
   /* ============================================================
+     BANCO DE LECHE 🥛
+     Libro de movimientos del que se calculan los saldos:
+     refri (lista para usar) y congelador (reserva).
+  ============================================================ */
+  function saldosBanco() {
+    let refri = 0, cong = 0;
+    for (const m of Store.data.banco) {
+      const ml = Number(m.ml) || 0;
+      switch (m.tipo) {
+        case 'extraccion': m.lugar === 'congelador' ? cong += ml : refri += ml; break;
+        case 'descongelar': cong -= ml; refri += ml; break;
+        case 'congelar': refri -= ml; cong += ml; break;
+        case 'consumo': refri -= ml; break;
+        case 'descarte': m.lugar === 'congelador' ? cong -= ml : refri -= ml; break;
+        case 'ajuste': m.lugar === 'congelador' ? cong += ml : refri += ml; break; // ml puede ser negativo
+      }
+    }
+    return { refri: Math.max(0, Math.round(refri)), cong: Math.max(0, Math.round(cong)) };
+  }
+
+  // meta sugerida: 2 días del consumo promedio de leche extraída en biberón
+  // (últimos 3 días con registros). Sin datos aún: 150 ml de arranque.
+  function objetivoBanco() {
+    const porDia = {};
+    Store.data.tomas.filter(t => t.tipo === 'donante' && t.ml).forEach(t => {
+      const f = fechaLocal(t.inicio);
+      porDia[f] = (porDia[f] || 0) + Number(t.ml);
+    });
+    const dias = Object.keys(porDia).sort().slice(-3);
+    const prom = dias.length ? dias.reduce((s, f) => s + porDia[f], 0) / dias.length : 0;
+    const meta = (prom || 75) * 2;
+    return Math.max(60, Math.round(meta / 10) * 10);
+  }
+
+  // nivel en tercios respecto a la meta
+  function nivelBanco(refri, objetivo) {
+    const pct = objetivo ? refri / objetivo : 0;
+    if (pct >= 2 / 3) return { color: '#4cc38a', texto: 'Reserva sana 💚' };
+    if (pct >= 1 / 3) return { color: '#f5b54a', texto: 'Va a la mitad 💛' };
+    return { color: '#e25555', texto: refri <= 0 ? 'Sin leche lista ❤️' : 'Queda poquita ❤️' };
+  }
+
+  function tanqueHTML(refri, objetivo, grande) {
+    const nivel = nivelBanco(refri, objetivo);
+    const pct = Math.min(100, Math.round((objetivo ? refri / objetivo : 0) * 100));
+    return `
+      <div class="tanque ${grande ? 'grande' : ''}" title="${pct}% de la meta">
+        <div class="nivel" style="height:${Math.max(pct, refri > 0 ? 8 : 0)}%;background-color:${nivel.color}">
+          <div class="ola"></div>
+        </div>
+      </div>`;
+  }
+
+  function bancoCardInicio() {
+    const { refri, cong } = saldosBanco();
+    const objetivo = objetivoBanco();
+    const nivel = nivelBanco(refri, objetivo);
+    return `
+      <div class="banco-card" data-accion="ver-banco">
+        ${tanqueHTML(refri, objetivo)}
+        <div class="banco-info">
+          <div class="b-titulo">Banco de leche 🥛</div>
+          <div class="b-ml">${refri} ml <small style="font-size:13px;color:var(--text-2);font-weight:600">listos en el refri</small></div>
+          <div class="b-sub">🧊 ${cong} ml congelados · meta ${objetivo} ml (~2 días)</div>
+          <span class="nivel-chip" style="background:${nivel.color}">${nivel.texto}</span>
+        </div>
+        <span class="mi-chev" style="color:#d4c6cd;font-size:20px">›</span>
+      </div>`;
+  }
+
+  // mantiene el banco en sintonía con las tomas de leche extraída
+  function sincronizarConsumoBanco(toma) {
+    const mov = Store.data.banco.find(m => m.tomaId === toma.id);
+    if (toma.tipo === 'donante' && Number(toma.ml) > 0) {
+      if (mov) Store.update('banco', mov.id, { ml: Number(toma.ml), fecha: toma.inicio });
+      else Store.add('banco', { tipo: 'consumo', lugar: 'refri', ml: Number(toma.ml), fecha: toma.inicio, tomaId: toma.id, notas: '' });
+    } else if (mov) {
+      Store.remove('banco', mov.id);
+    }
+  }
+
+  const NOMBRE_MOV = {
+    extraccion: m => ({ emoji: '🥛', titulo: `Extracción → ${m.lugar === 'congelador' ? 'congelador' : 'refri'}` }),
+    descongelar: () => ({ emoji: '🧊', titulo: 'Descongelada → refri' }),
+    congelar: () => ({ emoji: '❄️', titulo: 'Del refri → congelador' }),
+    consumo: () => ({ emoji: '🍼', titulo: 'Toma de leche extraída' }),
+    descarte: m => ({ emoji: '🗑️', titulo: `Descartada (${m.lugar === 'congelador' ? 'congelador' : 'refri'})` }),
+    ajuste: m => ({ emoji: '✏️', titulo: `Corrección de ${m.lugar === 'congelador' ? 'congelador' : 'refri'}` }),
+  };
+
+  function renderBanco() {
+    const { refri, cong } = saldosBanco();
+    const objetivo = objetivoBanco();
+    const nivel = nivelBanco(refri, objetivo);
+    const grupos = porDia(Store.data.banco, 'fecha');
+
+    main.innerHTML = `
+      ${volverMas}
+      <h2 class="section-title">Banco de leche 🥛</h2>
+      <div class="card" style="display:flex;gap:18px;align-items:center">
+        ${tanqueHTML(refri, objetivo, true)}
+        <div style="flex:1">
+          <div style="font-size:30px;font-weight:800;letter-spacing:-.5px">${refri} ml</div>
+          <div style="font-size:13px;color:var(--text-2);font-weight:600">listos para calentar y usar</div>
+          <span class="nivel-chip" style="background:${nivel.color}">${nivel.texto}</span>
+          <div style="font-size:12px;color:var(--text-2);margin-top:8px">
+            Meta sugerida: <b>${objetivo} ml</b> — unos 2 días de lo que suele tomar en biberón.
+          </div>
+        </div>
+      </div>
+      <div class="banco-saldos">
+        <div class="banco-saldo bg-blue"><div class="bs-ml">${refri} ml</div><div class="bs-label">🥛 En el refri</div></div>
+        <div class="banco-saldo bg-lav"><div class="bs-ml">${cong} ml</div><div class="bs-label">🧊 Congelados</div></div>
+      </div>
+      <div class="banco-acciones">
+        <button data-mov="extraccion"><span>🥛</span>Agregar extracción</button>
+        <button data-mov="descongelar"><span>🧊</span>Descongelar</button>
+        <button data-mov="congelar"><span>❄️</span>Congelar del refri</button>
+        <button data-mov="descarte"><span>🗑️</span>Descartar</button>
+      </div>
+      <button class="btn-ghost btn-block" data-mov="ajuste">✏️ Corregir inventario (contar lo que hay)</button>
+      <p class="disclaimer">La leche materna dura ~4 días en el refri y ~6 meses en el congelador. Usen primero la más antigua.</p>
+      ${listaEntradas(grupos, m => {
+        const info = NOMBRE_MOV[m.tipo] ? NOMBRE_MOV[m.tipo](m) : { emoji: '🥛', titulo: m.tipo };
+        const delta = m.tipo === 'ajuste' ? (m.ml > 0 ? `+${m.ml}` : `${m.ml}`) :
+          (m.tipo === 'consumo' || m.tipo === 'descarte') ? `−${m.ml}` : `${m.ml}`;
+        return `
+        <div class="entry">
+          <span class="entry-emoji">${info.emoji}</span>
+          <div class="entry-main">
+            <div class="entry-title">${info.titulo} · ${delta} ml</div>
+            ${m.notas ? `<div class="entry-sub">${esc(m.notas)}</div>` : ''}
+          </div>
+          <span class="entry-time">${fmtHora(m.fecha)}</span>
+          ${m.tomaId ? '<span style="font-size:11px;color:var(--text-2);padding:6px">desde la toma</span>' : `
+          <div class="entry-actions"><button data-del="banco:${m.id}">🗑️</button></div>`}
+        </div>`;
+      }, { emoji: '🥛', texto: 'Registra una extracción para empezar su banco de leche' })}
+    `;
+    bindVolver();
+    main.querySelectorAll('[data-mov]').forEach(b => b.onclick = () => hojaMovBanco(b.dataset.mov));
+  }
+
+  function hojaMovBanco(tipoMov) {
+    const { refri, cong } = saldosBanco();
+    const titulos = {
+      extraccion: 'Agregar extracción 🥛', descongelar: 'Descongelar 🧊',
+      congelar: 'Congelar del refri ❄️', descarte: 'Descartar leche 🗑️', ajuste: 'Corregir inventario ✏️',
+    };
+
+    if (tipoMov === 'ajuste') {
+      abrirSheet(`
+        <h2>${titulos.ajuste}</h2>
+        <p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Cuenten lo que hay físicamente y pongan los totales reales; la app ajusta la diferencia.</p>
+        <div class="form-row">
+          <div class="form-group"><label>En el refri (ml)</label>
+            <input type="number" inputmode="numeric" id="aj-refri" value="${refri}">
+          </div>
+          <div class="form-group"><label>Congelados (ml)</label>
+            <input type="number" inputmode="numeric" id="aj-cong" value="${cong}">
+          </div>
+        </div>
+        <button class="btn-primary btn-block" id="f-guardar">Guardar corrección</button>
+      `);
+      $('#f-guardar').onclick = () => {
+        const dRefri = (Number($('#aj-refri').value) || 0) - refri;
+        const dCong = (Number($('#aj-cong').value) || 0) - cong;
+        const ahora = new Date().toISOString();
+        if (dRefri) Store.add('banco', { tipo: 'ajuste', lugar: 'refri', ml: dRefri, fecha: ahora, notas: 'Conteo físico' });
+        if (dCong) Store.add('banco', { tipo: 'ajuste', lugar: 'congelador', ml: dCong, fecha: ahora, notas: 'Conteo físico' });
+        cerrarSheet();
+        toast(dRefri || dCong ? 'Inventario corregido ✏️' : 'Todo cuadraba ✅');
+      };
+      return;
+    }
+
+    const conLugar = tipoMov === 'extraccion' || tipoMov === 'descarte';
+    abrirSheet(`
+      <h2>${titulos[tipoMov]}</h2>
+      ${tipoMov === 'descongelar' ? `<p style="font-size:13px;color:var(--text-2)">Pasa del congelador (${cong} ml) al refri, lista para usar en ~24 h.</p>` : ''}
+      ${tipoMov === 'congelar' ? `<p style="font-size:13px;color:var(--text-2)">Pasa del refri (${refri} ml) al congelador para reserva larga.</p>` : ''}
+      <div class="ml-stepper">
+        <button type="button" id="ml-menos">−</button>
+        <div class="ml-value"><span id="ml-num">60</span> <small>ml</small></div>
+        <button type="button" id="ml-mas">+</button>
+      </div>
+      <div class="ml-presets">
+        ${[30, 60, 90, 120, 150].map(v => `<button type="button" data-ml="${v}">${v} ml</button>`).join('')}
+      </div>
+      ${conLugar ? `
+      <div class="form-group"><label>${tipoMov === 'extraccion' ? '¿Dónde se guarda?' : '¿De dónde se descarta?'}</label>
+        <div class="quien-chips" id="f-lugar">
+          <button type="button" class="activo" data-lugar="refri">🥛 Refri</button>
+          <button type="button" data-lugar="congelador">🧊 Congelador</button>
+        </div>
+      </div>` : ''}
+      <div class="form-group"><label>Notas (opcional)</label>
+        <input type="text" id="f-notas" placeholder="${tipoMov === 'descarte' ? 'Pasó de los 4 días…' : 'Extracción de la mañana…'}">
+      </div>
+      <button class="btn-primary btn-block" id="f-guardar">Guardar</button>
+    `);
+
+    let ml = 60, lugar = 'refri';
+    const num = $('#ml-num');
+    $('#ml-menos').onclick = () => { ml = Math.max(0, ml - 5); num.textContent = ml; };
+    $('#ml-mas').onclick = () => { ml += 5; num.textContent = ml; };
+    document.querySelectorAll('[data-ml]').forEach(b => b.onclick = () => { ml = Number(b.dataset.ml); num.textContent = ml; });
+    if (conLugar) {
+      $('#f-lugar').addEventListener('click', e => {
+        const b = e.target.closest('[data-lugar]');
+        if (!b) return;
+        lugar = b.dataset.lugar;
+        $('#f-lugar').querySelectorAll('button').forEach(x => x.classList.toggle('activo', x === b));
+      });
+    }
+    $('#f-guardar').onclick = () => {
+      if (!ml) { toast('Pon los mililitros'); return; }
+      if (tipoMov === 'descongelar' && ml > cong) { toast(`Solo hay ${cong} ml congelados`); return; }
+      if (tipoMov === 'congelar' && ml > refri) { toast(`Solo hay ${refri} ml en el refri`); return; }
+      Store.add('banco', { tipo: tipoMov, lugar, ml, fecha: new Date().toISOString(), notas: $('#f-notas').value.trim() });
+      cerrarSheet();
+      toast('Movimiento guardado 🥛');
+    };
+  }
+
+  /* ============================================================
      MÁS (menú y subvistas)
   ============================================================ */
   function renderMas() {
+    if (vistaMas === 'banco') return renderBanco();
     if (vistaMas === 'salud') return renderSalud();
     if (vistaMas === 'intervenciones') return renderIntervenciones();
     if (vistaMas === 'medicamentos') return renderMedicamentos();
@@ -1271,6 +1506,7 @@
     main.innerHTML = `
       <h2 class="section-title">Más</h2>
       <div class="menu-list">
+        ${item('banco', '🥛', 'bg-blue', 'Banco de leche', (() => { const s = saldosBanco(); return `${s.refri} ml listos · ${s.cong} ml congelados`; })())}
         ${item('salud', '🩺', 'bg-pink', 'Condiciones médicas', d.condiciones.length ? d.condiciones.map(c => c.nombre).join(', ') : 'Ictericia, seguimiento de labs…')}
         ${item('intervenciones', '💉', 'bg-peach', 'Intervenciones', d.intervenciones.length ? `${d.intervenciones.length} registradas` : 'Toma de sangre, vacunas, estudios…')}
         ${item('medicamentos', '💊', 'bg-mint', 'Medicamentos', d.medicamentos.filter(m => m.activo).length ? `${d.medicamentos.filter(m => m.activo).length} activos` : 'Tratamientos y vitaminas')}
@@ -2077,6 +2313,13 @@
       if (a === 'panal-popo') registrarPanal('popo');
       if (a === 'panal-mixto') registrarPanal('mixto');
       if (a === 'panal-manual') hojaPanal(null);
+      if (a === 'ver-banco') {
+        tabActual = 'mas';
+        vistaMas = 'banco';
+        document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'mas'));
+        render();
+        window.scrollTo(0, 0);
+      }
       if (a === 'act-terminar') terminarActividad(true);
       if (a === 'act-cancelar') { if (confirm('¿Cancelar la actividad sin marcarla?')) terminarActividad(false); }
       if (a === 'foto-semanal') pedirFotoSemanal(Number(btn.dataset.sem));
@@ -2104,6 +2347,10 @@
         if (col === 'panales') {
           const p = Store.data.panales.find(x => x.id === id);
           if (p && p.fotoId) Store.remove('fotos', p.fotoId); // su foto se va con él
+        }
+        if (col === 'tomas') {
+          const mov = Store.data.banco.find(m => m.tomaId === id);
+          if (mov) Store.remove('banco', mov.id); // devolver la leche al refri
         }
         Store.remove(col, id);
         toast('Registro borrado');

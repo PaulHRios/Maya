@@ -46,6 +46,7 @@ const Store = (() => {
     crecimiento: [],  // {id, fecha, pesoKg, tallaCm, perimetroCm, updatedAt}
     fotos: [],        // {id, fecha, titulo, archivo, dataUrl?, sincronizada, semana?, updatedAt}
     actividades: [],  // {id, fecha: 'YYYY-MM-DD', tarea, titulo, hecha, duracionSeg, updatedAt}
+    banco: [],        // movimientos de leche {id, tipo, lugar, ml, fecha, notas, tomaId?, updatedAt}
     borrados: [],     // tombstones {col, id, at}
   });
 
@@ -120,7 +121,7 @@ const Store = (() => {
   function onChange(fn) { listeners.push(fn); }
 
   /* ---------- CRUD genérico ---------- */
-  const COLS = ['tomas', 'suenos', 'panales', 'condiciones', 'intervenciones', 'medicamentos', 'crecimiento', 'fotos', 'actividades'];
+  const COLS = ['tomas', 'suenos', 'panales', 'condiciones', 'intervenciones', 'medicamentos', 'crecimiento', 'fotos', 'actividades', 'banco'];
 
   function add(col, item) {
     item.id = item.id || uid();
