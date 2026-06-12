@@ -139,7 +139,6 @@
     const esHoy = iso => new Date(iso).toDateString() === hoy.toDateString();
 
     const ultToma = [...d.tomas].sort((a, b) => b.inicio.localeCompare(a.inicio))[0];
-    const ultSueno = [...d.suenos].filter(s => s.fin && s.tipo !== 'vigilia').sort((a, b) => b.fin.localeCompare(a.fin))[0];
     const ultPanal = [...d.panales].sort((a, b) => b.hora.localeCompare(a.hora))[0];
 
     const tomasHoy = d.tomas.filter(t => esHoy(t.inicio));
@@ -149,8 +148,6 @@
     const pipiHoy = d.panales.filter(p => esHoy(p.hora) && (p.tipo === 'pipi' || p.tipo === 'mixto')).length;
     // pañales físicos gastados: cada registro es un pañal (mixto cuenta uno)
     const panalesHoy = d.panales.filter(p => esHoy(p.hora)).length;
-    const msSuenoHoy = d.suenos.filter(s => s.fin && s.tipo !== 'vigilia' && esHoy(s.inicio))
-      .reduce((t, s) => t + (new Date(s.fin) - new Date(s.inicio)), 0);
 
     const nombreTipo = { materno: 'Leche materna', donante: 'Leche extraída', formula: 'Fórmula' };
     const descToma = t => {
@@ -180,22 +177,21 @@
           <span class="stat-label">${mlHoy ? `${mlHoy} ml` : ''}${mlHoy && minPechoHoy ? ' · ' : ''}${minPechoHoy ? `${minPechoHoy} min pecho` : (mlHoy ? '' : 'hoy')}</span>
           <span class="stat-ago">${ultToma ? `última ${hace(ultToma.inicio)}` : ''}</span>
         </div>
-        <div class="stat-card bg-lav">
-          <span class="stat-emoji">🌙</span>
-          <span class="stat-value">${fmtDurLarga(msSuenoHoy)}</span>
-          <span class="stat-label">de sueño hoy</span>
-          <span class="stat-ago">${ultSueno ? `despertó ${hace(ultSueno.fin)}` : ''}</span>
-        </div>
-        <div class="stat-card bg-blue">
-          <span class="stat-emoji">💧</span>
-          <span class="stat-value">${pipiHoy} pipí</span>
-          <span class="stat-label">${popoHoy} popó hoy</span>
-          <span class="stat-ago">${ultPanal ? `último pañal ${hace(ultPanal.hora)}` : ''}</span>
-        </div>
         <div class="stat-card bg-yellow">
           <span class="stat-emoji">🧷</span>
           <span class="stat-value">${panalesHoy} pañal${panalesHoy === 1 ? '' : 'es'}</span>
           <span class="stat-label">gastados hoy</span>
+          <span class="stat-ago">${ultPanal ? `último ${hace(ultPanal.hora)}` : ''}</span>
+        </div>
+        <div class="stat-card bg-blue">
+          <span class="stat-emoji">💧</span>
+          <span class="stat-value">${pipiHoy} pipí</span>
+          <span class="stat-label">hoy</span>
+        </div>
+        <div class="stat-card bg-mint">
+          <span class="stat-emoji">💩</span>
+          <span class="stat-value">${popoHoy} popó</span>
+          <span class="stat-label">hoy</span>
         </div>
       </div>
 
@@ -284,6 +280,18 @@
       const b = e.target.closest('button[data-tipo]');
       if (b) { tipoComida = b.dataset.tipo; render(); }
     });
+  }
+
+  // desde Inicio: primero preguntar qué traía el biberón
+  function hojaTipoBiberon() {
+    abrirSheet(`
+      <h2>¿Qué traía el biberón? 🍼</h2>
+      <div class="dispositivo-botones">
+        <button class="bg-pink" data-bib="donante"><span>🥛</span>Leche extraída</button>
+        <button class="bg-blue" data-bib="formula"><span>🍼</span>Fórmula</button>
+      </div>
+    `);
+    document.querySelectorAll('[data-bib]').forEach(b => b.onclick = () => hojaBiberon(b.dataset.bib));
   }
 
   function hojaBiberon(tipo, existente) {
@@ -2055,7 +2063,7 @@
       if (a === 'toma-terminar') terminarToma(false);
       if (a === 'toma-cancelar') { if (confirm('¿Cancelar la toma sin guardar?')) terminarToma(true); }
       if (a === 'toma-manual') hojaBiberon('materno');
-      if (a === 'biberon') hojaBiberon(tipoComida === 'materno' ? 'formula' : tipoComida);
+      if (a === 'biberon') hojaTipoBiberon();
       if (a === 'biberon-tipo') hojaBiberon(tipoComida);
       if (a === 'dormir') iniciarSueno();
       if (a === 'sueno-terminar') terminarSueno(false);
