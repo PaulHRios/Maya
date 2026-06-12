@@ -133,6 +133,8 @@ const PDFResumen = (() => {
       y = encabezadoSeccion(doc, y, 'Pañales (pipí y popó)');
       if (pan.length) {
         const cuenta = tipo => dias.map(dia => pan.filter(p => mismoDia(p.hora, dia) && (p.tipo === tipo || p.tipo === 'mixto')).length);
+        // pañales físicos: cada registro es un pañal (mixto cuenta uno)
+        const usados = dias.map(dia => pan.filter(p => mismoDia(p.hora, dia)).length);
         const img = await chartImg({
           type: 'bar',
           data: {
@@ -140,6 +142,7 @@ const PDFResumen = (() => {
             datasets: [
               { label: 'Pipí', data: cuenta('pipi'), backgroundColor: '#74b9f0', borderRadius: 8 },
               { label: 'Popó', data: cuenta('popo'), backgroundColor: '#c79a6b', borderRadius: 8 },
+              { label: 'Pañales usados', data: usados, type: 'line', borderColor: '#d94f84', backgroundColor: '#d94f84', tension: .3, pointRadius: 4 },
             ],
           },
           options: { scales: { y: { ticks: { stepSize: 1 } } } },

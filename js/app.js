@@ -147,6 +147,8 @@
     const minPechoHoy = Math.round(tomasHoy.reduce((s, t) => s + (t.duracionSeg || 0), 0) / 60);
     const popoHoy = d.panales.filter(p => esHoy(p.hora) && (p.tipo === 'popo' || p.tipo === 'mixto')).length;
     const pipiHoy = d.panales.filter(p => esHoy(p.hora) && (p.tipo === 'pipi' || p.tipo === 'mixto')).length;
+    // pañales físicos gastados: cada registro es un pañal (mixto cuenta uno)
+    const panalesHoy = d.panales.filter(p => esHoy(p.hora)).length;
     const msSuenoHoy = d.suenos.filter(s => s.fin && s.tipo !== 'vigilia' && esHoy(s.inicio))
       .reduce((t, s) => t + (new Date(s.fin) - new Date(s.inicio)), 0);
 
@@ -187,13 +189,13 @@
         <div class="stat-card bg-blue">
           <span class="stat-emoji">💧</span>
           <span class="stat-value">${pipiHoy} pipí</span>
-          <span class="stat-label">hoy</span>
+          <span class="stat-label">${popoHoy} popó hoy</span>
+          <span class="stat-ago">${ultPanal ? `último pañal ${hace(ultPanal.hora)}` : ''}</span>
         </div>
         <div class="stat-card bg-yellow">
-          <span class="stat-emoji">💩</span>
-          <span class="stat-value">${popoHoy} popó</span>
-          <span class="stat-label">hoy</span>
-          <span class="stat-ago">${ultPanal ? `último pañal ${hace(ultPanal.hora)}` : ''}</span>
+          <span class="stat-emoji">🧷</span>
+          <span class="stat-value">${panalesHoy} pañal${panalesHoy === 1 ? '' : 'es'}</span>
+          <span class="stat-label">gastados hoy</span>
         </div>
       </div>
 
@@ -767,9 +769,9 @@
         <button class="diaper-btn bg-yellow" data-accion="panal-popo"><span>💩</span>Popó</button>
         <button class="diaper-btn bg-mint" data-accion="panal-mixto"><span>🌊</span>Ambos</button>
       </div>
-      <p style="text-align:center;font-size:13px;color:var(--text-2);margin-bottom:2px">Pipí se registra al instante; popó pregunta el color ✨</p>
+      <p style="text-align:center;font-size:13px;color:var(--text-2);margin-bottom:2px">Pipí se registra al instante; popó pregunta color y consistencia ✨</p>
       <button class="btn-ghost btn-block" data-accion="panal-manual">＋ Registrar con otra hora</button>
-      ${listaEntradas(grupos, p => {
+      ${listaEntradas(grupos.map(g => ({ ...g, dia: `${g.dia} · ${g.items.length} pañal${g.items.length === 1 ? '' : 'es'} 🧷` })), p => {
         const col = colorPopo(p.color);
         const cons = consistenciaPopo(p.consistencia);
         return `
@@ -801,27 +803,71 @@
       toast('Pipí 💧 registrado');
       return;
     }
-    // popó o ambos: preguntar el color con un toque (foto opcional con análisis)
+    // popó o ambos: color y consistencia con lectura en vivo (foto opcional)
     let fotoPend = null;
+    let det = null;
+    const sel = { color: null, cons: null };
+
     abrirSheet(`
-      <h2>${tipo === 'mixto' ? 'Pipí + Popó 🌊' : 'Popó 💩'} · ¿de qué color?</h2>
-      <div class="color-picker" id="pp-colores">
-        ${COLORES_POPO.map(c => `
-          <button class="color-opt" data-color="${c.id}">
-            <span class="bolita" style="background:${c.hex}"></span><span class="cnombre">${c.nombre}</span>
-          </button>`).join('')}
+      <h2>${tipo === 'mixto' ? 'Pipí + Popó 🌊' : 'Popó 💩'}</h2>
+      <div class="form-group"><label>Color</label>
+        <div class="color-picker" id="pp-colores">
+          ${COLORES_POPO.map(c => `
+            <button class="color-opt" data-color="${c.id}">
+              <span class="bolita" style="background:${c.hex}"></span><span class="cnombre">${c.nombre}</span>
+            </button>`).join('')}
+        </div>
       </div>
-      <button class="btn-secondary btn-block" id="f-sin-color" style="margin-top:10px">Guardar sin color</button>
-      <div class="form-row" style="margin-top:10px">
+      <div class="form-group"><label>Consistencia (opcional)</label>
+        <div class="color-picker" id="pp-cons">
+          ${CONSISTENCIAS.map(c => `
+            <button class="color-opt" data-cons="${c.id}">
+              <span style="font-size:24px">${c.emoji}</span><span class="cnombre">${c.nombre}</span>
+            </button>`).join('')}
+        </div>
+      </div>
+      <div id="pp-lectura"></div>
+      <div id="pp-analisis"></div>
+      <button class="btn-primary btn-block" id="pp-guardar" style="margin-top:12px">Guardar registro</button>
+      <div class="form-row" style="margin-top:6px">
         <button class="btn-ghost" style="flex:1" id="pp-camara">📷 Tomar foto</button>
         <button class="btn-ghost" style="flex:1" id="pp-carrete">🖼️ Del carrete</button>
       </div>
-      <div id="pp-analisis"></div>
-      <p class="disclaimer">La foto se analiza aquí mismo en el teléfono y se guarda en su repositorio privado. El análisis del color es aproximado, no un diagnóstico.</p>
+      <p class="disclaimer">La lectura es orientativa. Si agregan foto, se analiza aquí en el teléfono y se guarda en su repositorio privado.</p>
     `);
 
-    let consDetectada = null;
-    const guardar = colorId => {
+    const pintar = () => {
+      const colorEf = sel.color || (det && det.color) || null;
+      const consEf = sel.cons || (det && det.consistencia) || null;
+      document.querySelectorAll('#pp-colores .color-opt').forEach(b => {
+        b.classList.toggle('activo', b.dataset.color === sel.color);
+        const sug = !sel.color && det && b.dataset.color === det.color;
+        b.classList.toggle('sugerido', sug);
+        b.querySelector('.cnombre').textContent = (sug ? '✨ ' : '') + colorPopo(b.dataset.color).nombre;
+      });
+      document.querySelectorAll('#pp-cons .color-opt').forEach(b => {
+        b.classList.toggle('activo', b.dataset.cons === sel.cons);
+        const sug = !sel.cons && det && b.dataset.cons === det.consistencia;
+        b.classList.toggle('sugerido', sug);
+        b.querySelector('.cnombre').textContent = (sug ? '✨ ' : '') + consistenciaPopo(b.dataset.cons).nombre;
+      });
+      $('#pp-lectura').innerHTML = (colorEf || consEf)
+        ? `<div class="info-box" style="margin-top:4px"><h4>🔍 Lectura</h4>${lecturaCombinada(colorEf, consEf)}</div>`
+        : '';
+    };
+
+    document.querySelectorAll('#pp-colores .color-opt').forEach(b => b.onclick = () => {
+      sel.color = sel.color === b.dataset.color ? null : b.dataset.color;
+      pintar();
+    });
+    document.querySelectorAll('#pp-cons .color-opt').forEach(b => b.onclick = () => {
+      sel.cons = sel.cons === b.dataset.cons ? null : b.dataset.cons;
+      pintar();
+    });
+
+    $('#pp-guardar').onclick = () => {
+      const colorEf = sel.color || (det && det.color) || null;
+      const consEf = sel.cons || (det && det.consistencia) || null;
       let fotoId = null;
       if (fotoPend) {
         fotoId = Store.uid();
@@ -832,13 +878,11 @@
           dataUrl: fotoPend, sincronizada: false, categoria: 'panal',
         });
       }
-      Store.add('panales', { tipo, hora: new Date().toISOString(), color: colorId, consistencia: consDetectada, notas: '', fotoId });
+      Store.add('panales', { tipo, hora: new Date().toISOString(), color: colorEf, consistencia: consEf, notas: '', fotoId });
       cerrarSheet();
       toast(`${tipo === 'mixto' ? 'Pañal completo 🌊' : 'Popó 💩'} registrado${fotoPend ? ' con foto 📸' : ''}`);
-      avisoColor(colorId);
+      avisoColor(colorEf);
     };
-    document.querySelectorAll('#pp-colores .color-opt').forEach(b => b.onclick = () => guardar(b.dataset.color));
-    $('#f-sin-color').onclick = () => guardar(null);
 
     const agregarFoto = conCamara => {
       const input = document.createElement('input');
@@ -849,24 +893,15 @@
         cont.innerHTML = '<div class="pp-analizando">🔍 Analizando la foto…</div>';
         fotoPend = await leerFoto(e.target.files[0]).catch(() => null);
         if (!fotoPend) { cont.innerHTML = ''; toast('No se pudo leer la foto'); return; }
-        const r = await analizarFotoPopo(fotoPend);
-        let texto = 'No pude distinguir bien el color en la foto — elijan el que vean ustedes.';
-        if (r) {
-          consDetectada = r.consistencia || null;
-          const cons = consistenciaPopo(r.consistencia);
-          texto = `Parece <b>${colorPopo(r.color).nombre.toLowerCase()}</b>${cons ? ` y de consistencia <b>${cons.nombre.toLowerCase()}</b>` : ''}. ${LECTURA_COLOR[r.color]}${r.consistencia ? `<br>${LECTURA_CONSISTENCIA[r.consistencia]}` : ''}`;
-          document.querySelectorAll('#pp-colores .color-opt').forEach(b => {
-            const sug = b.dataset.color === r.color;
-            b.classList.toggle('sugerido', sug);
-            if (sug) b.querySelector('.cnombre').innerHTML = `✨ ${colorPopo(r.color).nombre}`;
-          });
-        }
+        det = await analizarFotoPopo(fotoPend);
         cont.innerHTML = `
           <div class="pp-resultado">
             <img src="${fotoPend}" alt="">
-            <div><b>🔍 Análisis automático</b><br>${texto}<br>
-            <small>Toca el color para guardar el registro con la foto.</small></div>
+            <div><b>📸 Foto lista</b><br>${det
+              ? `Lo que veo está marcado con ✨ arriba — corrijan lo que no cuadre.`
+              : 'No pude distinguir bien la foto; elijan ustedes el color y consistencia.'}</div>
           </div>`;
+        pintar();
       };
       input.click();
     };
@@ -984,6 +1019,14 @@
             </button>`).join('')}
         </div>
       </div>
+      <div id="f-cons-grupo" class="form-group ${tipo0 === 'pipi' ? 'hidden' : ''}"><label>Consistencia</label>
+        <div class="color-picker">
+          ${CONSISTENCIAS.map(c => `
+            <button type="button" class="color-opt ${existente && existente.consistencia === c.id ? 'activo' : ''}" data-cons="${c.id}">
+              <span style="font-size:24px">${c.emoji}</span>${c.nombre}
+            </button>`).join('')}
+        </div>
+      </div>
       <div class="form-group"><label>Hora</label>
         <input type="datetime-local" id="f-hora" value="${aInputLocal(existente ? existente.hora : null)}">
       </div>
@@ -993,17 +1036,28 @@
       <button class="btn-primary btn-block" id="f-guardar">Guardar</button>
     `);
     let color = existente ? existente.color : null;
+    let cons = existente ? (existente.consistencia || null) : null;
     document.querySelectorAll('#f-color-grupo .color-opt').forEach(b => b.onclick = () => {
       color = color === b.dataset.color ? null : b.dataset.color; // tocar de nuevo lo quita
       document.querySelectorAll('#f-color-grupo .color-opt').forEach(x =>
         x.classList.toggle('activo', x.dataset.color === color));
     });
-    $('#f-tipo').onchange = () =>
-      $('#f-color-grupo').classList.toggle('hidden', $('#f-tipo').value === 'pipi');
+    document.querySelectorAll('#f-cons-grupo .color-opt').forEach(b => b.onclick = () => {
+      cons = cons === b.dataset.cons ? null : b.dataset.cons;
+      document.querySelectorAll('#f-cons-grupo .color-opt').forEach(x =>
+        x.classList.toggle('activo', x.dataset.cons === cons));
+    });
+    $('#f-tipo').onchange = () => {
+      const esPipi = $('#f-tipo').value === 'pipi';
+      $('#f-color-grupo').classList.toggle('hidden', esPipi);
+      $('#f-cons-grupo').classList.toggle('hidden', esPipi);
+    };
     $('#f-guardar').onclick = () => {
+      const esPipi = $('#f-tipo').value === 'pipi';
       const reg = {
         tipo: $('#f-tipo').value,
-        color: $('#f-tipo').value === 'pipi' ? null : color,
+        color: esPipi ? null : color,
+        consistencia: esPipi ? null : cons,
         hora: deInputLocal($('#f-hora').value),
         notas: $('#f-notas').value.trim(),
       };
