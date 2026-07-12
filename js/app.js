@@ -1348,11 +1348,177 @@
     ajuste: m => ({ emoji: '✏️', titulo: `Corrección de ${m.lugar === 'congelador' ? 'congelador' : 'refri'}` }),
   };
 
+  /* ---------- timer de extracción (normal y power pumping) ---------- */
+  const FASES_POWER = [
+    { nombre: 'Extraer', min: 20 },
+    { nombre: 'Descansar', min: 10 },
+    { nombre: 'Extraer', min: 10 },
+    { nombre: 'Descansar', min: 10 },
+    { nombre: 'Extraer', min: 10 },
+  ];
+
+  function fasePower(seg) {
+    let acc = 0;
+    for (let i = 0; i < FASES_POWER.length; i++) {
+      acc += FASES_POWER[i].min * 60;
+      if (seg < acc) return { i, nombre: FASES_POWER[i].nombre, restante: acc - seg };
+    }
+    return null; // sesión completa
+  }
+
+  function iniciarExtraccion(modo) {
+    const timers = Store.getTimers();
+    if (timers.extraccion) { toast('Ya hay una extracción en curso'); return; }
+    timers.extraccion = { inicio: new Date().toISOString(), modo, faseAvisada: 0 };
+    Store.setTimers(timers);
+    toast(modo === 'power' ? '⚡ Power pumping: 20 min de extracción, ¡vamos!' : '⏱️ Extracción iniciada');
+  }
+
+  function terminarExtraccion(cancelar) {
+    const timers = Store.getTimers();
+    const ext = timers.extraccion;
+    if (!ext) return;
+    delete timers.extraccion;
+    Store.setTimers(timers);
+    if (cancelar) { toast('Extracción cancelada'); return; }
+    const dur = Math.round((Date.now() - new Date(ext.inicio)) / 1000);
+    hojaFinExtraccion(dur, ext.modo, ext.inicio);
+  }
+
+  function hojaFinExtraccion(duracionSeg, modo, inicioISO) {
+    abrirSheet(`
+      <h2>¿Cuánto salió? 🥛</h2>
+      <p style="font-size:13px;color:var(--text-2)">Sesión de ${Math.max(1, Math.round(duracionSeg / 60))} min${modo === 'power' ? ' · power pumping ⚡' : ''}</p>
+      <div class="ml-stepper">
+        <button type="button" id="ml-menos">−</button>
+        <div class="ml-value"><span id="ml-num">30</span> <small>ml</small></div>
+        <button type="button" id="ml-mas">+</button>
+      </div>
+      <div class="ml-presets">
+        ${[10, 20, 30, 45, 60, 90].map(v => `<button type="button" data-ml="${v}">${v} ml</button>`).join('')}
+      </div>
+      <div class="form-group"><label>¿Dónde se guarda?</label>
+        <div class="quien-chips" id="f-lugar">
+          <button type="button" class="activo" data-lugar="refri">🥛 Refri</button>
+          <button type="button" data-lugar="congelador">🧊 Congelador</button>
+        </div>
+      </div>
+      <div class="form-group"><label>Notas (opcional)</label>
+        <input type="text" id="f-notas" placeholder="Lado izquierdo, en la mañana…">
+      </div>
+      <button class="btn-primary btn-block" id="f-guardar">Guardar extracción</button>
+      <button class="btn-ghost btn-block" id="f-descartar" style="color:var(--danger)">Descartar sesión (no salió leche)</button>
+    `);
+    let ml = 30, lugar = 'refri';
+    const num = $('#ml-num');
+    $('#ml-menos').onclick = () => { ml = Math.max(0, ml - 5); num.textContent = ml; };
+    $('#ml-mas').onclick = () => { ml += 5; num.textContent = ml; };
+    document.querySelectorAll('[data-ml]').forEach(b => b.onclick = () => { ml = Number(b.dataset.ml); num.textContent = ml; });
+    $('#f-lugar').addEventListener('click', e => {
+      const b = e.target.closest('[data-lugar]');
+      if (!b) return;
+      lugar = b.dataset.lugar;
+      $('#f-lugar').querySelectorAll('button').forEach(x => x.classList.toggle('activo', x === b));
+    });
+    $('#f-descartar').onclick = () => { cerrarSheet(); toast('Sesión descartada'); };
+    $('#f-guardar').onclick = () => {
+      if (!ml) { toast('Pon los mililitros (o descarta la sesión)'); return; }
+      // récords ANTES de guardar, para comparar contra lo anterior
+      const exts = Store.data.banco.filter(m => m.tipo === 'extraccion' && m.ml > 0);
+      const maxSesion = Math.max(0, ...exts.map(m => Number(m.ml)));
+      const porDia = {};
+      exts.forEach(m => { const f = fechaLocal(m.fecha); porDia[f] = (porDia[f] || 0) + Number(m.ml); });
+      const hoy = fechaLocal();
+      const maxDiaPrevio = Math.max(0, ...Object.entries(porDia).filter(([f]) => f !== hoy).map(([, v]) => v));
+      const totalHoy = (porDia[hoy] || 0) + ml;
+
+      Store.add('banco', {
+        tipo: 'extraccion', lugar, ml, fecha: inicioISO || new Date().toISOString(),
+        duracionSeg, modo: modo || 'normal', notas: $('#f-notas').value.trim(),
+      });
+      cerrarSheet();
+      if (exts.length >= 3 && ml > maxSesion) {
+        confeti(100);
+        celebracion('🏆', '¡Nuevo récord de sesión!', `${ml} ml en una sola extracción`);
+      } else if (Object.keys(porDia).length >= 2 && totalHoy > maxDiaPrevio) {
+        confeti(80);
+        celebracion('🥇', '¡Récord de producción diaria!', `${totalHoy} ml extraídos hoy`);
+      } else {
+        toast(`🥛 +${ml} ml al ${lugar === 'congelador' ? 'congelador' : 'refri'}`);
+      }
+    };
+  }
+
+  /* ---------- estadísticas y entrenadora de producción ---------- */
+  function statsExtraccion() {
+    const exts = Store.data.banco.filter(m => m.tipo === 'extraccion' && m.ml > 0);
+    const porDia = {};
+    exts.forEach(m => { const f = fechaLocal(m.fecha); porDia[f] = (porDia[f] || 0) + Number(m.ml); });
+    const fechas = Object.keys(porDia).sort();
+    const hoy = fechaLocal();
+    const ult7 = fechas.slice(-7);
+    const promedio = ult7.length ? Math.round(ult7.reduce((s, f) => s + porDia[f], 0) / ult7.length) : 0;
+    const sesionesPorDia = fechas.length ? Math.round((exts.length / fechas.length) * 10) / 10 : 0;
+    const conDur = exts.filter(m => m.duracionSeg);
+    const durProm = conDur.length ? Math.round(conDur.reduce((s, m) => s + m.duracionSeg, 0) / conDur.length / 60) : null;
+    const ult3 = fechas.slice(-3).reduce((s, f) => s + porDia[f], 0) / Math.max(1, Math.min(3, fechas.length));
+    const prev3 = fechas.slice(-6, -3);
+    const prev = prev3.length ? prev3.reduce((s, f) => s + porDia[f], 0) / prev3.length : null;
+    const tendencia = prev ? Math.round(((ult3 - prev) / prev) * 100) : null;
+    const madrugada = exts.some(m => {
+      const h = new Date(m.fecha).getHours();
+      return m.fecha >= new Date(Date.now() - 3 * 86400000).toISOString() && h >= 2 && h < 6;
+    });
+    return {
+      exts, porDia, fechas,
+      hoy: porDia[hoy] || 0,
+      promedio, sesionesPorDia, durProm, tendencia, madrugada,
+      recordSesion: Math.max(0, ...exts.map(m => Number(m.ml))),
+      recordDia: Math.max(0, ...Object.values(porDia)),
+    };
+  }
+
+  const TIPS_GENERALES = [
+    { emoji: '💆', texto: 'Masaje suave y compresas tibias 2 minutos antes: el reflejo de bajada llega antes y sale más leche.' },
+    { emoji: '👶', texto: 'Ver, oler o tener cerca a Maya (o su foto en la app 😉) mientras extraes libera oxitocina y mejora la bajada.' },
+    { emoji: '💧', texto: 'Hidratación y comidas completas: la leche es ~90% agua. Ten un vaso al lado en cada sesión.' },
+    { emoji: '🍼', texto: 'Extraer 10 min justo después de amamantar manda la señal de "se necesita más" sin robarle leche a la bebé.' },
+    { emoji: '🧘', texto: 'El estrés bloquea la oxitocina: hombros sueltos, respira profundo y no te quedes viendo el bote.' },
+  ];
+
+  function tipsProduccion(s) {
+    const tips = [];
+    if (s.tendencia !== null && s.tendencia <= -10) {
+      tips.push({ emoji: '⚡', texto: `La producción bajó ~${Math.abs(s.tendencia)}% estos días. Prueba el power pumping 1 vez al día durante 3–7 días: 20 min extraer, 10 de descanso, 10 extraer, 10 descanso, 10 extraer. El botón ⚡ de arriba te guía con las fases.` });
+    }
+    if (s.sesionesPorDia && s.sesionesPorDia < 4) {
+      tips.push({ emoji: '🔁', texto: `Van ~${s.sesionesPorDia} extracciones por día. La producción responde a la frecuencia más que a la duración: acercarse a 6–8 sesiones cortas al día "ordena" producir más.` });
+    }
+    if (!s.madrugada) {
+      tips.push({ emoji: '🌙', texto: 'Una extracción entre 2 y 5 a.m. aprovecha el pico de prolactina — es la hora que más estimula la producción (y como andan despiertos en las vigilias… 😅).' });
+    }
+    if (s.durProm !== null && s.durProm < 12) {
+      tips.push({ emoji: '⏱️', texto: `Tus sesiones promedian ${s.durProm} min. Apunta a 15–20 min y sigue 2–5 min después de la última gota: el vaciado completo es la señal más fuerte para producir.` });
+    }
+    if (s.tendencia !== null && s.tendencia >= 10) {
+      tips.push({ emoji: '📈', texto: `¡La producción va subiendo ~${s.tendencia}%! Lo que están haciendo funciona — mantengan la misma rutina de horarios.` });
+    }
+    // completar hasta 3 con tips generales, rotando por día
+    const dia = Math.floor(Date.now() / 86400000);
+    for (let i = 0; tips.length < 3 && i < TIPS_GENERALES.length; i++) {
+      tips.push(TIPS_GENERALES[(dia + i) % TIPS_GENERALES.length]);
+    }
+    return tips.slice(0, 3);
+  }
+
   function renderBanco() {
     const { refri, cong } = saldosBanco();
     const objetivo = objetivoBanco();
     const nivel = nivelBanco(refri, objetivo);
     const grupos = porDia(Store.data.banco, 'fecha');
+    const s = statsExtraccion();
+    const timers = Store.getTimers();
+    const tips = tipsProduccion(s);
 
     main.innerHTML = `
       ${volverMas}
@@ -1372,13 +1538,34 @@
         <div class="banco-saldo bg-blue"><div class="bs-ml">${refri} ml</div><div class="bs-label">🥛 En el refri</div></div>
         <div class="banco-saldo bg-lav"><div class="bs-ml">${cong} ml</div><div class="bs-label">🧊 Congelados</div></div>
       </div>
+      ${timers.extraccion ? '<div class="empty-state" style="padding:12px">⏱️ Extracción en curso — usa la barra azul de arriba</div>' : `
+      <div class="form-row" style="margin-bottom:10px">
+        <button class="btn-primary" style="flex:1" data-ext="normal">⏱️ Iniciar extracción</button>
+        <button class="btn-secondary" style="flex:1" data-ext="power">⚡ Power pumping</button>
+      </div>`}
       <div class="banco-acciones">
-        <button data-mov="extraccion"><span>🥛</span>Agregar extracción</button>
+        <button data-mov="extraccion"><span>🥛</span>Agregar sin timer</button>
         <button data-mov="descongelar"><span>🧊</span>Descongelar</button>
         <button data-mov="congelar"><span>❄️</span>Congelar del refri</button>
         <button data-mov="descarte"><span>🗑️</span>Descartar</button>
       </div>
       <button class="btn-ghost btn-block" data-mov="ajuste">✏️ Corregir inventario (contar lo que hay)</button>
+
+      <h2 class="section-title" style="margin-top:18px">Producción 📈</h2>
+      <div class="prod-stats">
+        <div class="prod-stat"><div class="ps-num">${s.hoy} ml</div><div class="ps-label">hoy</div></div>
+        <div class="prod-stat"><div class="ps-num">${s.promedio} ml</div><div class="ps-label">promedio/día</div></div>
+        <div class="prod-stat record"><div class="ps-num">🏆 ${s.recordDia}</div><div class="ps-label">récord día</div></div>
+        <div class="prod-stat record"><div class="ps-num">🥇 ${s.recordSesion}</div><div class="ps-label">récord sesión</div></div>
+      </div>
+      ${s.fechas.length >= 2 ? '<div class="card"><canvas class="chart" id="chart-prod" height="170"></canvas></div>' : ''}
+
+      <div class="tips-card">
+        <h3>🤖 Entrenadora de producción</h3>
+        <div class="tc-resumen">${s.exts.length ? `${s.sesionesPorDia} sesiones/día · promedio ${s.promedio} ml/día${s.durProm ? ` · ${s.durProm} min por sesión` : ''}${s.tendencia !== null ? ` · tendencia ${s.tendencia > 0 ? '+' : ''}${s.tendencia}%` : ''}` : 'Registra tus primeras extracciones para recibir consejos a tu medida.'}</div>
+        ${tips.map(t => `<div class="tip-item"><span class="t-emoji">${t.emoji}</span><span>${t.texto}</span></div>`).join('')}
+        <p class="disclaimer" style="margin-top:8px">Consejos generales de lactancia; una asesora certificada siempre es la mejor guía.</p>
+      </div>
       <p class="disclaimer">La leche materna dura ~4 días en el refri y ~6 meses en el congelador. Usen primero la más antigua.</p>
       ${listaEntradas(grupos, m => {
         const info = NOMBRE_MOV[m.tipo] ? NOMBRE_MOV[m.tipo](m) : { emoji: '🥛', titulo: m.tipo };
@@ -1389,7 +1576,10 @@
           <span class="entry-emoji">${info.emoji}</span>
           <div class="entry-main">
             <div class="entry-title">${info.titulo} · ${delta} ml</div>
-            ${m.notas ? `<div class="entry-sub">${esc(m.notas)}</div>` : ''}
+            ${m.duracionSeg || m.notas ? `<div class="entry-sub">${[
+              m.duracionSeg && `⏱️ ${Math.max(1, Math.round(m.duracionSeg / 60))} min${m.modo === 'power' ? ' · power ⚡' : ''}`,
+              m.notas && esc(m.notas),
+            ].filter(Boolean).join(' · ')}</div>` : ''}
           </div>
           <span class="entry-time">${fmtHora(m.fecha)}</span>
           ${m.tomaId ? '<span style="font-size:11px;color:var(--text-2);padding:6px">desde la toma</span>' : `
@@ -1399,6 +1589,30 @@
     `;
     bindVolver();
     main.querySelectorAll('[data-mov]').forEach(b => b.onclick = () => hojaMovBanco(b.dataset.mov));
+    main.querySelectorAll('[data-ext]').forEach(b => b.onclick = () => iniciarExtraccion(b.dataset.ext));
+
+    // gráfica: producción por día (últimos 10 días naturales)
+    const cv = $('#chart-prod');
+    if (cv) {
+      const dias = [];
+      for (let i = 9; i >= 0; i--) {
+        const d = new Date(); d.setDate(d.getDate() - i);
+        dias.push(fechaLocal(d));
+      }
+      new Chart(cv, {
+        type: 'bar',
+        data: {
+          labels: dias.map(f => new Date(f + 'T12:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })),
+          datasets: [{
+            label: 'ml extraídos por día',
+            data: dias.map(f => s.porDia[f] || 0),
+            backgroundColor: dias.map(f => (s.porDia[f] || 0) >= s.recordDia && s.recordDia > 0 ? '#f5b54a' : '#74b9f0'),
+            borderRadius: 8,
+          }],
+        },
+        options: { plugins: { legend: { display: false } } },
+      });
+    }
   }
 
   function hojaMovBanco(tipoMov) {
@@ -2251,6 +2465,27 @@
           </div>
         </div>`;
     }
+    if (timers.extraccion) {
+      const seg = Math.floor((Date.now() - new Date(timers.extraccion.inicio)) / 1000);
+      let info;
+      if (timers.extraccion.modo === 'power') {
+        const fase = fasePower(seg);
+        info = fase
+          ? `⚡ ${fase.nombre} <span class="fase-chip">fase ${fase.i + 1}/5 · falta ${fmtDur(fase.restante)}</span>`
+          : '⚡ ¡Sesión completa! 🏆';
+      } else {
+        info = '🥛 Extrayendo';
+      }
+      html += `
+        <div class="timer-banner extraccion">
+          <div class="timer-info">${info}
+            <span class="timer-clock">${fmtDur(seg)}</span></div>
+          <div>
+            <button data-accion="ext-cancelar">✕</button>
+            <button class="stop" data-accion="ext-terminar">■ Terminar</button>
+          </div>
+        </div>`;
+    }
     if (timers.vigilia) {
       const seg = Math.floor((Date.now() - new Date(timers.vigilia.inicio)) / 1000);
       html += `
@@ -2320,6 +2555,8 @@
         render();
         window.scrollTo(0, 0);
       }
+      if (a === 'ext-terminar') terminarExtraccion(false);
+      if (a === 'ext-cancelar') { if (confirm('¿Cancelar la extracción sin guardar?')) terminarExtraccion(true); }
       if (a === 'act-terminar') terminarActividad(true);
       if (a === 'act-cancelar') { if (confirm('¿Cancelar la actividad sin marcarla?')) terminarActividad(false); }
       if (a === 'foto-semanal') pedirFotoSemanal(Number(btn.dataset.sem));
@@ -2411,11 +2648,24 @@
     clearInterval(tickInterval);
     tickInterval = setInterval(() => {
       const t = Store.getTimers();
-      if (t.toma || t.sueno || t.actividad || t.vigilia) renderTimers();
+      if (t.toma || t.sueno || t.actividad || t.vigilia || t.extraccion) renderTimers();
       // cuando el timer de la actividad llega a cero, se marca sola ✅
       if (t.actividad) {
         const fin = new Date(t.actividad.inicio).getTime() + t.actividad.min * 60000;
         if (Date.now() >= fin) terminarActividad(true);
+      }
+      // avisos de cambio de fase en power pumping
+      if (t.extraccion && t.extraccion.modo === 'power') {
+        const seg = Math.floor((Date.now() - new Date(t.extraccion.inicio)) / 1000);
+        const fase = fasePower(seg);
+        const idx = fase ? fase.i : FASES_POWER.length; // fin = índice extra
+        if (idx !== (t.extraccion.faseAvisada || 0)) {
+          t.extraccion.faseAvisada = idx;
+          Store.setTimers(t);
+          toast(fase
+            ? `⚡ ${fase.nombre === 'Descansar' ? 'Descanso' : '¡A extraer!'} · ${FASES_POWER[fase.i].min} min`
+            : '⚡ ¡Power pumping completo! Toca Terminar y registra tus ml 🏆');
+        }
       }
     }, 1000);
 
