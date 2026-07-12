@@ -352,6 +352,7 @@
         registro.ml = ml;
         registro.lado = null;
       }
+      const faltanteAntes = saldosBanco().faltante;
       const guardada = existente
         ? Store.update('tomas', existente.id, registro)
         : Store.add('tomas', registro);
@@ -359,9 +360,9 @@
       cerrarSheet();
       toast(existente ? 'Toma actualizada' : 'Toma guardada 🍼');
       if (registro.tipo === 'donante') {
-        const { refri, refriReal } = saldosBanco();
-        setTimeout(() => toast(refriReal < 0
-          ? '⚠️ El banco no tenía esa leche registrada — corrige el inventario en Banco de leche 🥛'
+        const { refri, faltante } = saldosBanco();
+        setTimeout(() => toast(faltante > faltanteAntes
+          ? '⚠️ El banco no tenía toda esa leche registrada — no olviden registrar sus extracciones 🥛'
           : `🥛 Quedan ${refri} ml listos en el refri`), 1400);
       }
     };
@@ -1267,20 +1268,24 @@
      refri (lista para usar) y congelador (reserva).
   ============================================================ */
   function saldosBanco() {
-    let refri = 0, cong = 0;
-    for (const m of Store.data.banco) {
+    // en orden cronológico y con piso en cero: si una toma consume leche
+    // que no estaba registrada, se come lo disponible y ya — el banco
+    // nunca "debe" leche ni acumula hoyos invisibles. Lo consumido de
+    // más se reporta como "faltante" para poder avisar.
+    const movs = [...Store.data.banco].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+    let refri = 0, cong = 0, faltante = 0;
+    for (const m of movs) {
       const ml = Number(m.ml) || 0;
       switch (m.tipo) {
         case 'extraccion': m.lugar === 'congelador' ? cong += ml : refri += ml; break;
-        case 'descongelar': cong -= ml; refri += ml; break;
-        case 'congelar': refri -= ml; cong += ml; break;
-        case 'consumo': refri -= ml; break;
-        case 'descarte': m.lugar === 'congelador' ? cong -= ml : refri -= ml; break;
-        case 'ajuste': m.lugar === 'congelador' ? cong += ml : refri += ml; break; // ml puede ser negativo
+        case 'descongelar': { const q = Math.min(ml, cong); cong -= q; refri += q; break; }
+        case 'congelar': { const q = Math.min(ml, refri); refri -= q; cong += q; break; }
+        case 'consumo': { const q = Math.min(ml, refri); faltante += ml - q; refri -= q; break; }
+        case 'descarte': m.lugar === 'congelador' ? cong = Math.max(0, cong - ml) : refri = Math.max(0, refri - ml); break;
+        case 'ajuste': m.lugar === 'congelador' ? cong = Math.max(0, cong + ml) : refri = Math.max(0, refri + ml); break;
       }
     }
-    // refriReal puede ser negativo: señal de consumo sin leche registrada
-    return { refri: Math.max(0, Math.round(refri)), cong: Math.max(0, Math.round(cong)), refriReal: Math.round(refri) };
+    return { refri: Math.round(refri), cong: Math.round(cong), faltante: Math.round(faltante) };
   }
 
   // meta sugerida: 2 días del consumo promedio de leche extraída en biberón
