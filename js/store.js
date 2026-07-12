@@ -13,6 +13,7 @@ const Store = (() => {
   // llave derivada de las credenciales). Solo se descifra al iniciar sesión
   // con el usuario y contraseña correctos; en el código solo hay ruido.
   const SYNC_EMBED = {
+    v: 1,
     owner: 'PaulHRios',
     repo: 'maya_datos',
     salt: 'pyjCGrQ4cDvf9+LtA9Cn8w==',
@@ -72,14 +73,17 @@ const Store = (() => {
     if (h !== ACCESS_HASH) return false;
     localStorage.setItem(LS_SESSION, 'ok');
 
-    // dejar lista la sincronización sin que haya que configurar nada
+    // dejar lista la sincronización sin que haya que configurar nada.
+    // Si la app trae un token embebido más nuevo (SYNC_EMBED.v), se adopta
+    // al iniciar sesión: así basta cerrar y abrir sesión tras una rotación.
     try {
       const raw = localStorage.getItem(LS_CONFIG);
       if (raw) config = Object.assign(config, JSON.parse(raw));
-      if (!config.token) {
+      if (!config.token || (config.tokenV || 0) < (SYNC_EMBED.v || 1)) {
         const token = await descifrarToken(credencial);
         if (token) {
           config.token = token;
+          config.tokenV = SYNC_EMBED.v || 1;
           if (!config.owner) config.owner = SYNC_EMBED.owner;
           if (!config.repo) config.repo = SYNC_EMBED.repo;
           saveConfig();
@@ -223,7 +227,15 @@ const Store = (() => {
   });
 
   function b64encodeUtf8(str) {
-    return btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+    // por bloques: desparramar cada byte como argumento individual
+    // revienta la pila del iPhone cuando el archivo crece (>~65 KB)
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    const BLOQUE = 0x8000;
+    for (let i = 0; i < bytes.length; i += BLOQUE) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + BLOQUE));
+    }
+    return btoa(bin);
   }
   function b64decodeUtf8(b64) {
     const bin = atob(b64.replace(/\n/g, ''));
@@ -298,11 +310,18 @@ const Store = (() => {
       let sha = null;
       if (remoteFile) {
         sha = remoteFile.sha;
-        const remote = JSON.parse(b64decodeUtf8(remoteFile.content));
-        data = mergeData(remote);
+        let texto;
+        if (remoteFile.content) {
+          texto = b64decodeUtf8(remoteFile.content);
+        } else if (remoteFile.download_url) {
+          // archivos >1MB: la API ya no regresa el contenido inline
+          const r = await fetch(remoteFile.download_url);
+          if (!r.ok) throw new Error(`GitHub raw ${r.status}`);
+          texto = await r.text();
+        }
+        if (texto) data = mergeData(JSON.parse(texto));
       }
-      await syncPhotos();
-      // no subir las fotos en el JSON (van como archivos aparte)
+      // primero los registros: una foto atorada nunca debe bloquearlos
       const slim = JSON.parse(JSON.stringify(data));
       slim.fotos = slim.fotos.map(f => { const c = { ...f }; delete c.dataUrl; return c; });
       await ghPutFile('datos/maya.json', b64encodeUtf8(JSON.stringify(slim, null, 1)), sha, `Registro ${new Date().toLocaleString('es-MX')}`);
@@ -310,6 +329,12 @@ const Store = (() => {
       saveConfig();
       localStorage.setItem(LS_DATA, JSON.stringify(data));
       setSyncState('ok');
+      try {
+        await syncPhotos();
+        localStorage.setItem(LS_DATA, JSON.stringify(data));
+      } catch (e) {
+        console.error('Fotos pendientes de subir', e);
+      }
     } catch (e) {
       console.error('Error de sincronización', e);
       setSyncState('error');
