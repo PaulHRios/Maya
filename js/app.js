@@ -1348,30 +1348,96 @@
     ajuste: m => ({ emoji: '✏️', titulo: `Corrección de ${m.lugar === 'congelador' ? 'congelador' : 'refri'}` }),
   };
 
-  /* ---------- timer de extracción (normal y power pumping) ---------- */
-  const FASES_POWER = [
-    { nombre: 'Extraer', min: 20 },
-    { nombre: 'Descansar', min: 10 },
-    { nombre: 'Extraer', min: 10 },
-    { nombre: 'Descansar', min: 10 },
-    { nombre: 'Extraer', min: 10 },
-  ];
+  /* ---------- timer de extracción con métodos guiados ---------- */
+  const MODOS_EXTRACCION = {
+    normal: {
+      nombre: 'Sencilla', emoji: '🍼', fases: null,
+      desc: 'Libre: tú decides cuándo parar. Recomendado 15–20 min.',
+    },
+    medela: {
+      nombre: 'Medela 2 fases', emoji: '🎛️',
+      desc: 'El ciclo de tu bomba: 2 min en modo estimulación (gotitas) y 13 en modo extracción. Te aviso cuándo cambiar.',
+      fases: [
+        { nombre: 'Estimulación (modo gotitas)', min: 2 },
+        { nombre: 'Extracción (modo succión)', min: 13 },
+      ],
+    },
+    stanford: {
+      nombre: 'Manos activas', emoji: '🙌',
+      desc: 'Método Stanford: masaje antes, compresiones durante y remate manual. Puede sacar hasta 48% más.',
+      fases: [
+        { nombre: 'Masaje en ambos pechos', min: 2 },
+        { nombre: 'Extraer con compresiones', min: 15 },
+        { nombre: 'Remate con extracción manual', min: 3 },
+      ],
+    },
+    power: {
+      nombre: 'Power pumping', emoji: '⚡',
+      desc: 'Para subir producción: simula que la bebé pide muy seguido. Ideal 1 vez al día por 3–7 días. Dura 1 hora.',
+      fases: [
+        { nombre: 'Extraer', min: 20 },
+        { nombre: 'Descansar', min: 10 },
+        { nombre: 'Extraer', min: 10 },
+        { nombre: 'Descansar', min: 10 },
+        { nombre: 'Extraer', min: 10 },
+      ],
+    },
+    powerx: {
+      nombre: 'Power exprés', emoji: '🌪️',
+      desc: 'La versión corta del power pumping para cuando no hay una hora: 40 min.',
+      fases: [
+        { nombre: 'Extraer', min: 10 },
+        { nombre: 'Descansar', min: 5 },
+        { nombre: 'Extraer', min: 10 },
+        { nombre: 'Descansar', min: 5 },
+        { nombre: 'Extraer', min: 10 },
+      ],
+    },
+    postoma: {
+      nombre: 'Después de amamantar', emoji: '➕',
+      desc: '10 min justo después de la toma: manda la señal de "se necesita más" sin quitarle leche a Maya.',
+      fases: [{ nombre: 'Extraer', min: 10 }],
+    },
+  };
+  const modoExt = id => MODOS_EXTRACCION[id] || MODOS_EXTRACCION.normal;
+  const duracionModo = m => (m.fases || []).reduce((s, f) => s + f.min, 0);
 
-  function fasePower(seg) {
+  function faseDe(modoId, seg) {
+    const fases = modoExt(modoId).fases;
+    if (!fases) return null;
     let acc = 0;
-    for (let i = 0; i < FASES_POWER.length; i++) {
-      acc += FASES_POWER[i].min * 60;
-      if (seg < acc) return { i, nombre: FASES_POWER[i].nombre, restante: acc - seg };
+    for (let i = 0; i < fases.length; i++) {
+      acc += fases[i].min * 60;
+      if (seg < acc) return { i, total: fases.length, nombre: fases[i].nombre, min: fases[i].min, restante: acc - seg };
     }
-    return null; // sesión completa
+    return { fin: true }; // sesión completa
   }
 
-  function iniciarExtraccion(modo) {
+  function hojaElegirMetodo() {
+    abrirSheet(`
+      <h2>¿Qué método hoy? 🥛</h2>
+      <div class="menu-list">
+        ${Object.entries(MODOS_EXTRACCION).map(([id, m]) => `
+          <button class="menu-item" data-metodo="${id}">
+            <span class="mi-emoji bg-blue">${m.emoji}</span>
+            <span>${m.nombre}${m.fases ? ` <small style="font-weight:600;color:var(--text-2)">· ${duracionModo(m)} min</small>` : ''}
+              <span class="mi-sub">${m.desc}</span></span>
+          </button>`).join('')}
+      </div>
+    `);
+    document.querySelectorAll('[data-metodo]').forEach(b => b.onclick = () => {
+      cerrarSheet();
+      iniciarExtraccion(b.dataset.metodo);
+    });
+  }
+
+  function iniciarExtraccion(modoId) {
     const timers = Store.getTimers();
     if (timers.extraccion) { toast('Ya hay una extracción en curso'); return; }
-    timers.extraccion = { inicio: new Date().toISOString(), modo, faseAvisada: 0 };
+    timers.extraccion = { inicio: new Date().toISOString(), modo: modoId, faseAvisada: 0 };
     Store.setTimers(timers);
-    toast(modo === 'power' ? '⚡ Power pumping: 20 min de extracción, ¡vamos!' : '⏱️ Extracción iniciada');
+    const m = modoExt(modoId);
+    toast(m.fases ? `${m.emoji} ${m.nombre}: ${m.fases[0].nombre}, ${m.fases[0].min} min` : '⏱️ Extracción iniciada');
   }
 
   function terminarExtraccion(cancelar) {
@@ -1388,7 +1454,7 @@
   function hojaFinExtraccion(duracionSeg, modo, inicioISO) {
     abrirSheet(`
       <h2>¿Cuánto salió? 🥛</h2>
-      <p style="font-size:13px;color:var(--text-2)">Sesión de ${Math.max(1, Math.round(duracionSeg / 60))} min${modo === 'power' ? ' · power pumping ⚡' : ''}</p>
+      <p style="font-size:13px;color:var(--text-2)">Sesión de ${Math.max(1, Math.round(duracionSeg / 60))} min${modo && modo !== 'normal' ? ` · ${modoExt(modo).emoji} ${modoExt(modo).nombre}` : ''}</p>
       <div class="ml-stepper">
         <button type="button" id="ml-menos">−</button>
         <div class="ml-value"><span id="ml-num">30</span> <small>ml</small></div>
@@ -1479,17 +1545,21 @@
   }
 
   const TIPS_GENERALES = [
+    { emoji: '📏', texto: 'Revisa la talla del embudo de tu Medela: el pezón debe moverse libre sin jalar areola. Una talla equivocada puede bajar mucho la producción (y doler).' },
+    { emoji: '🎚️', texto: 'En tu Medela usa el vacío más alto que NO duela: sube niveles hasta que incomode y bájale uno. Dolor = menos leche, no más.' },
+    { emoji: '🤲', texto: 'Aprovecha que tu bomba es manos libres: compresiones suaves en el pecho mientras extraes sacan notablemente más (método "manos activas" del timer).' },
     { emoji: '💆', texto: 'Masaje suave y compresas tibias 2 minutos antes: el reflejo de bajada llega antes y sale más leche.' },
     { emoji: '👶', texto: 'Ver, oler o tener cerca a Maya (o su foto en la app 😉) mientras extraes libera oxitocina y mejora la bajada.' },
     { emoji: '💧', texto: 'Hidratación y comidas completas: la leche es ~90% agua. Ten un vaso al lado en cada sesión.' },
-    { emoji: '🍼', texto: 'Extraer 10 min justo después de amamantar manda la señal de "se necesita más" sin robarle leche a la bebé.' },
+    { emoji: '🍼', texto: 'El método "Después de amamantar" del timer (10 min tras la toma) manda la señal de "se necesita más" sin robarle leche a la bebé.' },
     { emoji: '🧘', texto: 'El estrés bloquea la oxitocina: hombros sueltos, respira profundo y no te quedes viendo el bote.' },
+    { emoji: '🔄', texto: 'Si la bomba deja de sacar pero aún sientes leche, vuelve 1 minuto al modo estimulación de tu Medela: provoca una segunda bajada.' },
   ];
 
   function tipsProduccion(s) {
     const tips = [];
     if (s.tendencia !== null && s.tendencia <= -10) {
-      tips.push({ emoji: '⚡', texto: `La producción bajó ~${Math.abs(s.tendencia)}% estos días. Prueba el power pumping 1 vez al día durante 3–7 días: 20 min extraer, 10 de descanso, 10 extraer, 10 descanso, 10 extraer. El botón ⚡ de arriba te guía con las fases.` });
+      tips.push({ emoji: '⚡', texto: `La producción bajó ~${Math.abs(s.tendencia)}% estos días. Prueba el Power pumping (o el exprés si no hay una hora) 1 vez al día durante 3–7 días — está en el timer de arriba y te guía con las fases.` });
     }
     if (s.sesionesPorDia && s.sesionesPorDia < 4) {
       tips.push({ emoji: '🔁', texto: `Van ~${s.sesionesPorDia} extracciones por día. La producción responde a la frecuencia más que a la duración: acercarse a 6–8 sesiones cortas al día "ordena" producir más.` });
@@ -1539,10 +1609,7 @@
         <div class="banco-saldo bg-lav"><div class="bs-ml">${cong} ml</div><div class="bs-label">🧊 Congelados</div></div>
       </div>
       ${timers.extraccion ? '<div class="empty-state" style="padding:12px">⏱️ Extracción en curso — usa la barra azul de arriba</div>' : `
-      <div class="form-row" style="margin-bottom:10px">
-        <button class="btn-primary" style="flex:1" data-ext="normal">⏱️ Iniciar extracción</button>
-        <button class="btn-secondary" style="flex:1" data-ext="power">⚡ Power pumping</button>
-      </div>`}
+      <button class="btn-primary btn-block" id="btn-elegir-metodo" style="margin-bottom:10px;padding:17px">⏱️ Iniciar extracción · elegir método</button>`}
       <div class="banco-acciones">
         <button data-mov="extraccion"><span>🥛</span>Agregar sin timer</button>
         <button data-mov="descongelar"><span>🧊</span>Descongelar</button>
@@ -1577,7 +1644,7 @@
           <div class="entry-main">
             <div class="entry-title">${info.titulo} · ${delta} ml</div>
             ${m.duracionSeg || m.notas ? `<div class="entry-sub">${[
-              m.duracionSeg && `⏱️ ${Math.max(1, Math.round(m.duracionSeg / 60))} min${m.modo === 'power' ? ' · power ⚡' : ''}`,
+              m.duracionSeg && `⏱️ ${Math.max(1, Math.round(m.duracionSeg / 60))} min${m.modo && m.modo !== 'normal' ? ` · ${modoExt(m.modo).emoji} ${modoExt(m.modo).nombre}` : ''}`,
               m.notas && esc(m.notas),
             ].filter(Boolean).join(' · ')}</div>` : ''}
           </div>
@@ -1589,7 +1656,8 @@
     `;
     bindVolver();
     main.querySelectorAll('[data-mov]').forEach(b => b.onclick = () => hojaMovBanco(b.dataset.mov));
-    main.querySelectorAll('[data-ext]').forEach(b => b.onclick = () => iniciarExtraccion(b.dataset.ext));
+    const btnMetodo = $('#btn-elegir-metodo');
+    if (btnMetodo) btnMetodo.onclick = hojaElegirMetodo;
 
     // gráfica: producción por día (últimos 10 días naturales)
     const cv = $('#chart-prod');
@@ -2467,15 +2535,12 @@
     }
     if (timers.extraccion) {
       const seg = Math.floor((Date.now() - new Date(timers.extraccion.inicio)) / 1000);
+      const m = modoExt(timers.extraccion.modo);
+      const fase = faseDe(timers.extraccion.modo, seg);
       let info;
-      if (timers.extraccion.modo === 'power') {
-        const fase = fasePower(seg);
-        info = fase
-          ? `⚡ ${fase.nombre} <span class="fase-chip">fase ${fase.i + 1}/5 · falta ${fmtDur(fase.restante)}</span>`
-          : '⚡ ¡Sesión completa! 🏆';
-      } else {
-        info = '🥛 Extrayendo';
-      }
+      if (!fase) info = '🥛 Extrayendo';
+      else if (fase.fin) info = `${m.emoji} ¡Sesión completa! 🏆`;
+      else info = `${m.emoji} ${esc(fase.nombre)} <span class="fase-chip">${fase.i + 1}/${fase.total} · falta ${fmtDur(fase.restante)}</span>`;
       html += `
         <div class="timer-banner extraccion">
           <div class="timer-info">${info}
@@ -2654,17 +2719,18 @@
         const fin = new Date(t.actividad.inicio).getTime() + t.actividad.min * 60000;
         if (Date.now() >= fin) terminarActividad(true);
       }
-      // avisos de cambio de fase en power pumping
-      if (t.extraccion && t.extraccion.modo === 'power') {
+      // avisos de cambio de fase en métodos guiados
+      if (t.extraccion && modoExt(t.extraccion.modo).fases) {
+        const m = modoExt(t.extraccion.modo);
         const seg = Math.floor((Date.now() - new Date(t.extraccion.inicio)) / 1000);
-        const fase = fasePower(seg);
-        const idx = fase ? fase.i : FASES_POWER.length; // fin = índice extra
+        const fase = faseDe(t.extraccion.modo, seg);
+        const idx = fase.fin ? m.fases.length : fase.i;
         if (idx !== (t.extraccion.faseAvisada || 0)) {
           t.extraccion.faseAvisada = idx;
           Store.setTimers(t);
-          toast(fase
-            ? `⚡ ${fase.nombre === 'Descansar' ? 'Descanso' : '¡A extraer!'} · ${FASES_POWER[fase.i].min} min`
-            : '⚡ ¡Power pumping completo! Toca Terminar y registra tus ml 🏆');
+          toast(fase.fin
+            ? `${m.emoji} ¡${m.nombre} completo! Toca Terminar y registra tus ml 🏆`
+            : `${m.emoji} ${fase.nombre} · ${fase.min} min`);
         }
       }
     }, 1000);
