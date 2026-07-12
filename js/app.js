@@ -253,7 +253,8 @@
         <button class="btn-ghost btn-block" data-accion="toma-manual">＋ Registrar toma de pecho sin timer</button>
       `;
     } else {
-      panel = `<button class="btn-primary btn-block" data-accion="biberon-tipo">＋ Registrar ${tipoComida === 'donante' ? 'leche extraída' : 'fórmula'}</button>`;
+      panel = `<button class="btn-primary btn-block" data-accion="biberon-tipo">＋ Registrar toma de ${tipoComida === 'donante' ? 'leche extraída (biberón)' : 'fórmula'}</button>
+        ${tipoComida === 'donante' ? '<button class="btn-ghost btn-block" data-accion="ver-banco">🥛 ¿Extrajiste leche? Agrégala en el Banco de leche</button>' : ''}`;
     }
 
     const grupos = porDia(d.tomas, 'inicio');
@@ -299,7 +300,8 @@
   function hojaBiberon(tipo, existente) {
     const ml0 = existente ? (existente.ml || 60) : 60;
     abrirSheet(`
-      <h2>${existente ? 'Editar toma' : tipo === 'donante' ? 'Leche extraída 🥛' : tipo === 'formula' ? 'Fórmula 🍼' : 'Toma de pecho 🤱'}</h2>
+      <h2>${existente ? 'Editar toma' : tipo === 'donante' ? 'Toma de leche extraída 🥛' : tipo === 'formula' ? 'Fórmula 🍼' : 'Toma de pecho 🤱'}</h2>
+      ${!existente && tipo === 'donante' ? `<p style="font-size:13px;color:var(--text-2);margin:-6px 0 12px">Esto registra lo que Maya <b>se tomó</b> en biberón (se resta del banco de leche). Para agregar leche que extrajiste, usa el <b>Banco de leche 🥛</b>.</p>` : ''}
       ${tipo === 'materno' ? `
         <div class="form-group"><label>Lado</label>
           <select id="f-lado">
@@ -357,8 +359,10 @@
       cerrarSheet();
       toast(existente ? 'Toma actualizada' : 'Toma guardada 🍼');
       if (registro.tipo === 'donante') {
-        const { refri } = saldosBanco();
-        setTimeout(() => toast(`🥛 Quedan ${refri} ml listos en el refri`), 1400);
+        const { refri, refriReal } = saldosBanco();
+        setTimeout(() => toast(refriReal < 0
+          ? '⚠️ El banco no tenía esa leche registrada — corrige el inventario en Banco de leche 🥛'
+          : `🥛 Quedan ${refri} ml listos en el refri`), 1400);
       }
     };
   }
@@ -1275,7 +1279,8 @@
         case 'ajuste': m.lugar === 'congelador' ? cong += ml : refri += ml; break; // ml puede ser negativo
       }
     }
-    return { refri: Math.max(0, Math.round(refri)), cong: Math.max(0, Math.round(cong)) };
+    // refriReal puede ser negativo: señal de consumo sin leche registrada
+    return { refri: Math.max(0, Math.round(refri)), cong: Math.max(0, Math.round(cong)), refriReal: Math.round(refri) };
   }
 
   // meta sugerida: 2 días del consumo promedio de leche extraída en biberón
