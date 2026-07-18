@@ -62,6 +62,7 @@ const Store = (() => {
     fotos: [],        // {id, fecha, titulo, archivo, dataUrl?, sincronizada, semana?, updatedAt}
     actividades: [],  // {id, fecha: 'YYYY-MM-DD', tarea, titulo, hecha, duracionSeg, updatedAt}
     banco: [],        // movimientos de leche {id, tipo, lugar, ml, fecha, notas, tomaId?, updatedAt}
+    rutina: null,     // rutina de dormir {pasos:[{id, emoji, titulo, min}], hora, updatedAt}
     borrados: [],     // tombstones {col, id, at}
   });
 
@@ -279,6 +280,8 @@ const Store = (() => {
       if (!tombs.has(k) || tombs.get(k).at < t.at) tombs.set(k, t);
     });
     merged.borrados = [...tombs.values()].slice(-500);
+    merged.rutina = (remote.rutina && (!data.rutina || (remote.rutina.updatedAt || '') > (data.rutina.updatedAt || '')))
+      ? remote.rutina : data.rutina;
 
     for (const col of COLS) {
       const byId = new Map();

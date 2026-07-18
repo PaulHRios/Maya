@@ -426,6 +426,267 @@
   ============================================================ */
   const esVigilia = s => s.tipo === 'vigilia';
 
+  /* ---------- ventanas de despierto por edad (en minutos) ---------- */
+  const VENTANAS_SUENO = [
+    { desde: 0, hasta: 4, min: 45, max: 60, siestas: '4–6 siestas · 14–17 h de sueño al día' },
+    { desde: 4, hasta: 9, min: 45, max: 75, siestas: '4–5 siestas · 14–17 h al día' },
+    { desde: 9, hasta: 13, min: 60, max: 90, siestas: '4–5 siestas · 14–16 h al día' },
+    { desde: 13, hasta: 17, min: 75, max: 120, siestas: '3–4 siestas · 13–16 h al día' },
+    { desde: 17, hasta: 26, min: 90, max: 150, siestas: '3–4 siestas · 12–15 h al día' },
+    { desde: 26, hasta: 39, min: 120, max: 180, siestas: '2–3 siestas · 12–15 h al día' },
+    { desde: 39, hasta: 53, min: 150, max: 210, siestas: '2 siestas · 12–14 h al día' },
+  ];
+
+  function ventanaEdad() {
+    const dias = edadDias();
+    if (dias === null) return null;
+    const sem = Math.floor(dias / 7);
+    return VENTANAS_SUENO.find(v => sem >= v.desde && sem < v.hasta) || VENTANAS_SUENO[VENTANAS_SUENO.length - 1];
+  }
+
+  function cardVentanaSueno() {
+    const v = ventanaEdad();
+    if (!v) return '';
+    const timers = Store.getTimers();
+    if (timers.sueno) return `
+      <div class="card ventana-card">
+        <h2>⏳ Ventana de despierta</h2>
+        <p style="font-size:14px;color:var(--text-2)">Está dormida 😴 — al despertar, su ventana para esta edad es de <b>${v.min}–${v.max} min</b> antes de la siguiente siesta.</p>
+      </div>`;
+    const ult = Store.data.suenos.filter(s => s.fin && s.tipo !== 'vigilia')
+      .sort((a, b) => b.fin.localeCompare(a.fin))[0];
+    if (!ult) return `
+      <div class="card ventana-card">
+        <h2>⏳ Ventana de despierta</h2>
+        <p style="font-size:14px;color:var(--text-2)">A su edad aguanta despierta <b>${v.min}–${v.max} min</b> entre sueños (${v.siestas}). Registra sus sueños y aquí verás cuándo se acerca su hora.</p>
+      </div>`;
+    const despiertaMin = Math.floor((Date.now() - new Date(ult.fin)) / 60000);
+    const pct = Math.min(100, Math.round((despiertaMin / v.max) * 100));
+    let color = '#4cc38a', estado = 'Recién recargada ✨';
+    if (despiertaMin >= v.max) { color = '#e25555'; estado = '¡Ventana pasada! Puede sobre-cansarse y costarle más dormir'; }
+    else if (despiertaMin >= v.min) { color = '#f5b54a'; estado = 'En su punto: es buen momento para dormirla 😴'; }
+    else if (pct >= 70) { color = '#f5b54a'; estado = 'Se acerca su hora — vayan bajando el ritmo'; }
+    return `
+      <div class="card ventana-card">
+        <h2>⏳ Ventana de despierta</h2>
+        <div style="font-size:22px;font-weight:800">${Math.floor(despiertaMin / 60) ? `${Math.floor(despiertaMin / 60)} h ` : ''}${despiertaMin % 60} min <small style="font-size:13px;color:var(--text-2);font-weight:600">despierta</small></div>
+        <div class="ventana-barra"><div class="vb-fill" style="width:${pct}%;background-color:${color}"></div></div>
+        <div class="ventana-meta"><span>0</span><span>${v.min} min</span><span>${v.max} min</span></div>
+        <p style="font-size:13px;font-weight:700;margin-top:6px;color:${color}">${estado}</p>
+        <p style="font-size:12px;color:var(--text-2);margin-top:4px">A su edad: ${v.min}–${v.max} min por ventana · ${v.siestas}</p>
+      </div>`;
+  }
+
+  /* ---------- rutina de dormir ---------- */
+  const RUTINA_BASE = () => [
+    { id: 'r1', emoji: '🛁', titulo: 'Baño tibio', min: 10 },
+    { id: 'r2', emoji: '👐', titulo: 'Masaje con crema', min: 5 },
+    { id: 'r3', emoji: '👶', titulo: 'Pañal y pijama', min: 5 },
+    { id: 'r4', emoji: '🍼', titulo: 'Última toma (con luz baja)', min: 15 },
+    { id: 'r5', emoji: '📖', titulo: 'Cuento o canción bajito', min: 5 },
+    { id: 'r6', emoji: '🌙', titulo: 'Luz apagada + ruido blanco', min: 1 },
+    { id: 'r7', emoji: '😴', titulo: 'A la cuna somnolienta pero despierta', min: 1 },
+  ];
+
+  function cardRutina() {
+    const r = Store.data.rutina;
+    const timers = Store.getTimers();
+    if (timers.rutina) {
+      const pasos = (r && r.pasos) || [];
+      const hechos = timers.rutina.hechos || [];
+      const todos = pasos.length && hechos.length >= pasos.length;
+      return `
+        <div class="card" style="border-left:5px solid #7c63d8">
+          <div class="card-row"><h2 style="margin:0">🌙 Rutina en curso</h2>
+            <button class="btn-ghost" data-accion="rutina-cancelar" style="color:var(--danger)">✕</button></div>
+          <div class="rutina-progreso"><div style="width:${pasos.length ? Math.round((hechos.length / pasos.length) * 100) : 0}%"></div></div>
+          ${pasos.map(p => `
+            <div class="rutina-paso ${hechos.includes(p.id) ? 'hecho' : ''}">
+              <span class="rp-emoji">${p.emoji}</span>
+              <span class="rp-titulo">${esc(p.titulo)}</span>
+              ${p.min > 1 ? `<span class="rp-min">~${p.min} min</span>` : ''}
+              <button class="rutina-check ${hechos.includes(p.id) ? 'lista' : ''}" data-paso="${p.id}">✓</button>
+            </div>`).join('')}
+          ${todos ? `<button class="btn-primary btn-block" data-accion="rutina-dormir" style="margin-top:8px">😴 ¡Se durmió! Iniciar timer de sueño</button>` : ''}
+        </div>`;
+    }
+    if (!r || !r.pasos || !r.pasos.length) {
+      return `
+        <div class="card" style="border-left:5px solid #7c63d8">
+          <h2>🌙 Rutina de dormir</h2>
+          <p style="font-size:13.5px;color:var(--text-2);margin-bottom:12px">La misma secuencia cada noche le enseña al cuerpo de ${esc(Store.data.bebe.nombre || 'la bebé')} que viene el sueño largo. Es lo que más recomiendan los expertos en sueño infantil.</p>
+          <button class="btn-secondary btn-block" data-accion="rutina-editar">✨ Crear nuestra rutina</button>
+        </div>`;
+    }
+    const dur = r.pasos.reduce((s, p) => s + (p.min || 0), 0);
+    return `
+      <div class="card" style="border-left:5px solid #7c63d8">
+        <div class="card-row">
+          <h2 style="margin:0">🌙 Rutina de dormir</h2>
+          <button class="btn-ghost" data-accion="rutina-editar">✏️ Editar</button>
+        </div>
+        <p style="font-size:13px;color:var(--text-2)">${r.pasos.length} pasos · ~${dur} min${r.hora ? ` · hora objetivo ${r.hora}` : ''}</p>
+        <p style="font-size:12.5px;color:var(--text-2)">${r.pasos.map(p => p.emoji).join(' → ')}</p>
+        <button class="btn-primary btn-block" data-accion="rutina-iniciar" style="margin-top:10px">▶ Empezar rutina de esta noche</button>
+      </div>`;
+  }
+
+  function hojaEditarRutina() {
+    const r = Store.data.rutina;
+    let pasos = r && r.pasos && r.pasos.length ? JSON.parse(JSON.stringify(r.pasos)) : RUTINA_BASE();
+    let hora = (r && r.hora) || '20:00';
+
+    const pintar = () => {
+      $('#re-pasos').innerHTML = pasos.map((p, i) => `
+        <div class="rutina-paso">
+          <span class="rp-emoji">${p.emoji}</span>
+          <span class="rp-titulo">${esc(p.titulo)}</span>
+          ${p.min > 1 ? `<span class="rp-min">~${p.min} min</span>` : ''}
+          <div class="entry-actions">
+            ${i > 0 ? `<button data-sube="${i}">⬆️</button>` : ''}
+            <button data-quita="${i}">✕</button>
+          </div>
+        </div>`).join('') || '<p style="color:var(--text-2);font-size:14px">Agrega pasos abajo ↓</p>';
+      $('#re-pasos').querySelectorAll('[data-quita]').forEach(b => b.onclick = () => { pasos.splice(Number(b.dataset.quita), 1); pintar(); });
+      $('#re-pasos').querySelectorAll('[data-sube]').forEach(b => b.onclick = () => {
+        const i = Number(b.dataset.sube);
+        [pasos[i - 1], pasos[i]] = [pasos[i], pasos[i - 1]];
+        pintar();
+      });
+    };
+
+    abrirSheet(`
+      <h2>${r && r.pasos ? 'Editar' : 'Crear'} rutina de dormir 🌙</h2>
+      <p style="font-size:12.5px;color:var(--text-2);margin-bottom:10px">Consejo: siempre el mismo orden, empezando 30–45 min antes de la hora objetivo, y terminando en la cuna somnolienta pero despierta.</p>
+      <div id="re-pasos"></div>
+      <div class="form-row" style="margin-top:10px">
+        <div class="form-group" style="flex:0 0 62px"><label>Emoji</label>
+          <input type="text" id="re-emoji" value="🧸" maxlength="4" style="text-align:center">
+        </div>
+        <div class="form-group"><label>Nuevo paso</label>
+          <input type="text" id="re-titulo" placeholder="Mecerla 5 minutos…">
+        </div>
+        <div class="form-group" style="flex:0 0 74px"><label>Min</label>
+          <input type="number" id="re-min" inputmode="numeric" value="5">
+        </div>
+      </div>
+      <button class="btn-secondary btn-block" id="re-agregar">＋ Agregar paso</button>
+      <div class="form-group" style="margin-top:12px"><label>Hora objetivo para dormir (misma cada noche)</label>
+        <input type="time" id="re-hora" value="${hora}">
+      </div>
+      <button class="btn-primary btn-block" id="re-guardar">Guardar rutina</button>
+    `);
+    pintar();
+    $('#re-agregar').onclick = () => {
+      const titulo = $('#re-titulo').value.trim();
+      if (!titulo) { toast('Escribe el paso'); return; }
+      pasos.push({ id: Store.uid(), emoji: $('#re-emoji').value.trim() || '🧸', titulo, min: Number($('#re-min').value) || 1 });
+      $('#re-titulo').value = '';
+      pintar();
+    };
+    $('#re-guardar').onclick = () => {
+      if (!pasos.length) { toast('Agrega al menos un paso'); return; }
+      Store.data.rutina = { pasos, hora: $('#re-hora').value, updatedAt: new Date().toISOString() };
+      Store.saveLocal();
+      cerrarSheet();
+      toast('Rutina guardada 🌙');
+    };
+  }
+
+  function iniciarRutina() {
+    const timers = Store.getTimers();
+    if (timers.rutina) return;
+    timers.rutina = { inicio: new Date().toISOString(), hechos: [] };
+    Store.setTimers(timers);
+    toast('🌙 Rutina iniciada — palomea cada paso');
+  }
+
+  function marcarPasoRutina(id) {
+    const timers = Store.getTimers();
+    if (!timers.rutina) return;
+    const hechos = timers.rutina.hechos || [];
+    timers.rutina.hechos = hechos.includes(id) ? hechos.filter(x => x !== id) : [...hechos, id];
+    Store.setTimers(timers);
+    const pasos = (Store.data.rutina && Store.data.rutina.pasos) || [];
+    if (pasos.length && timers.rutina.hechos.length >= pasos.length) {
+      confeti(60);
+      toast('✨ Rutina completa — ahora sí, a dormir');
+    }
+  }
+
+  function terminarRutina(durmio) {
+    const timers = Store.getTimers();
+    if (!timers.rutina) return;
+    delete timers.rutina;
+    Store.setTimers(timers);
+    if (durmio) {
+      iniciarSueno();
+      celebracion('🌙', '¡Buenas noches!', 'Rutina completa y timer de sueño corriendo');
+    } else {
+      toast('Rutina cancelada');
+    }
+  }
+
+  /* ---------- sugerencias para dormir mejor ---------- */
+  function sugerenciasDormir() {
+    const tips = [];
+    const d = Store.data;
+    const dias = edadDias();
+    const DIA_MS = 86400000;
+
+    // noches: sueños que inician entre 18:00 y 02:00, últimos 7 días
+    const noches = d.suenos.filter(s => {
+      if (!s.fin || s.tipo === 'vigilia') return false;
+      const t = new Date(s.inicio);
+      if (Date.now() - t > 7 * DIA_MS) return false;
+      const h = t.getHours();
+      return h >= 18 || h < 2;
+    });
+
+    // consistencia de la hora de acostarla
+    const inicios = noches.filter(s => new Date(s.inicio).getHours() >= 18).map(s => {
+      const t = new Date(s.inicio);
+      return t.getHours() * 60 + t.getMinutes();
+    });
+    if (inicios.length >= 3) {
+      const rango = Math.max(...inicios) - Math.min(...inicios);
+      if (rango > 90) tips.push({ emoji: '🕗', texto: `La hora de dormirla varió ${Math.round(rango / 60 * 10) / 10} h esta semana. Una hora fija (± 30 min) es de lo que más ayuda a dormir corrido${d.rutina && d.rutina.hora ? ` — su objetivo es ${d.rutina.hora}` : ''}.` });
+      else tips.push({ emoji: '🏅', texto: 'La hora de acostarla ha sido muy constante esta semana — eso construye el sueño nocturno. ¡Sigan así!' });
+    }
+
+    // mejor racha nocturna
+    const rachas = noches.map(s => new Date(s.fin) - new Date(s.inicio));
+    if (rachas.length) {
+      const mejor = Math.max(...rachas);
+      tips.push({ emoji: '🌙', texto: `Su mejor racha nocturna esta semana: ${fmtDurLarga(mejor)}. Ese número irá creciendo solo con la rutina constante.` });
+    }
+
+    // confusión día/noche (primeras 8 semanas)
+    if (dias !== null && dias <= 56) {
+      const en7 = d.suenos.filter(s => s.fin && s.tipo !== 'vigilia' && Date.now() - new Date(s.inicio) < 7 * DIA_MS);
+      const deDia = en7.filter(s => { const h = new Date(s.inicio).getHours(); return h >= 8 && h < 19; })
+        .reduce((t, s) => t + (new Date(s.fin) - new Date(s.inicio)), 0);
+      const deNoche = en7.filter(s => { const h = new Date(s.inicio).getHours(); return h >= 19 || h < 8; })
+        .reduce((t, s) => t + (new Date(s.fin) - new Date(s.inicio)), 0);
+      if (deDia > deNoche * 1.3 && en7.length >= 5) {
+        tips.push({ emoji: '☀️', texto: 'Está durmiendo más de día que de noche. Para voltearlo: de día luz y ruido normal en sus siestas; de noche oscuridad total, voz bajita y tomas aburridas (sin jugar ni prender luces).' });
+      }
+    }
+
+    // generales que rotan por día
+    const POOL = [
+      { emoji: '😴', texto: 'Acuéstenla somnolienta pero aún despierta: así aprende a dormirse sola en su cuna, y a hilar ciclos sin ayuda a media noche.' },
+      { emoji: '🌑', texto: 'Cuarto bien oscuro y ruido blanco constante toda la noche: recrea el útero y tapa los ruidos de la casa.' },
+      { emoji: '🍼', texto: 'Tomas nocturnas en modo aburrido: luz mínima, sin plática ni juego, cambio de pañal solo si hace falta. Comer y de vuelta a la cuna.' },
+      { emoji: '🌡️', texto: 'Temperatura fresca (20–22 °C) y su saquito de dormir en vez de cobijas sueltas — más seguro y duerme mejor.' },
+      { emoji: '⏳', texto: 'Respetar sus ventanas de despierta evita el sobre-cansancio: un bebé pasado de cansancio pelea más el sueño, no menos.' },
+      { emoji: '🧺', texto: 'La última siesta no muy pegada a la noche: dejen al menos una ventana completa antes de la rutina.' },
+    ];
+    const dia = Math.floor(Date.now() / DIA_MS);
+    for (let i = 0; tips.length < 4 && i < POOL.length; i++) tips.push(POOL[(dia + i) % POOL.length]);
+    return tips.slice(0, 4);
+  }
+
   function nombreQuien(q) {
     const b = Store.data.bebe;
     if (q === 'mama') return b.mama || 'Mamá';
@@ -467,6 +728,15 @@
           : `<button class="bg-yellow" data-accion="vigilia"><span>👁️</span>En vigilia<span class="hint">despierta y alerta</span></button>`}
       </div>
       ${cardVigilia}
+      ${cardVentanaSueno()}
+      ${cardRutina()}
+      <details class="card" style="border-left:5px solid #4cc38a">
+        <summary style="font-weight:800;font-size:16px;cursor:pointer">💤 Dormir mejor — consejos de esta semana</summary>
+        <div style="margin-top:10px">
+          ${sugerenciasDormir().map(t => `<div class="tip-item" style="border-top:1px solid var(--linea)"><span class="t-emoji">${t.emoji}</span><span>${t.texto}</span></div>`).join('')}
+        </div>
+        <p class="disclaimer" style="margin-top:8px">Basado en guías de sueño infantil y sus propios registros de la semana.</p>
+      </details>
       <button class="btn-ghost btn-block" data-accion="sueno-manual">＋ Registrar sueño o vigilia con horario manual</button>
       ${listaEntradas(grupos, s => {
         const ms = new Date(s.fin) - new Date(s.inicio);
@@ -2642,6 +2912,18 @@
           </div>
         </div>`;
     }
+    if (timers.rutina) {
+      const pasos = (Store.data.rutina && Store.data.rutina.pasos) || [];
+      const hechos = (timers.rutina.hechos || []).length;
+      html += `
+        <div class="timer-banner rutina">
+          <div class="timer-info">🌙 Rutina de dormir
+            <span class="timer-clock">${hechos}/${pasos.length}</span></div>
+          <div>
+            <button data-accion="ir-sueno">Ver</button>
+          </div>
+        </div>`;
+    }
     if (timers.vigilia) {
       const seg = Math.floor((Date.now() - new Date(timers.vigilia.inicio)) / 1000);
       html += `
@@ -2696,6 +2978,16 @@
       if (a === 'sueno-terminar') terminarSueno(false);
       if (a === 'sueno-cancelar') { if (confirm('¿Cancelar sin guardar?')) terminarSueno(true); }
       if (a === 'sueno-manual') hojaSuenoManual();
+      if (a === 'rutina-editar') hojaEditarRutina();
+      if (a === 'rutina-iniciar') iniciarRutina();
+      if (a === 'rutina-cancelar') { if (confirm('¿Cancelar la rutina de esta noche?')) terminarRutina(false); }
+      if (a === 'rutina-dormir') terminarRutina(true);
+      if (a === 'ir-sueno') {
+        tabActual = 'sueno';
+        document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'sueno'));
+        render();
+        window.scrollTo(0, 0);
+      }
       if (a === 'vigilia') iniciarVigilia();
       if (a === 'vigilia-terminar') terminarVigilia(false);
       if (a === 'vigilia-cancelar') { if (confirm('¿Cancelar sin guardar?')) terminarVigilia(true); }
@@ -2727,6 +3019,9 @@
       if (a === 'foto-semanal') pedirFotoSemanal(Number(btn.dataset.sem));
       return;
     }
+
+    const pasoBtn = e.target.closest('[data-paso]');
+    if (pasoBtn) { marcarPasoRutina(pasoBtn.dataset.paso); return; }
 
     const editBtn = e.target.closest('[data-edit]');
     if (editBtn) {

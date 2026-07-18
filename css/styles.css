@@ -813,3 +813,43 @@ canvas.chart { width: 100% !important; }
 .hallazgo.nivel-info { border-left: 4px solid #8b6ef0; }
 .h-lista { padding-left: 18px; margin: 6px 0 2px; color: var(--text-2); font-size: 13px; }
 .h-lista li { margin-bottom: 3px; }
+
+/* ============ ventana de sueño y rutina de dormir ============ */
+.ventana-card { border-left: 5px solid #9b87e8; }
+.ventana-barra {
+  height: 14px; border-radius: 100px; background: var(--seg);
+  overflow: hidden; margin: 10px 0 6px;
+}
+.ventana-barra .vb-fill {
+  height: 100%; border-radius: 100px;
+  transition: width .8s cubic-bezier(.2,.9,.3,1), background-color .4s;
+}
+.ventana-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-2); font-weight: 600; }
+
+.rutina-paso {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card); border-radius: 16px; padding: 12px 14px;
+  box-shadow: var(--shadow); margin-bottom: 8px;
+}
+.rutina-paso .rp-emoji { font-size: 24px; }
+.rutina-paso .rp-titulo { flex: 1; font-weight: 700; font-size: 14.5px; }
+.rutina-paso .rp-min { font-size: 12px; color: var(--text-2); font-weight: 700; white-space: nowrap; }
+.rutina-paso.hecho { opacity: .6; }
+.rutina-paso.hecho .rp-titulo { text-decoration: line-through; text-decoration-color: #4cc38a; }
+.rutina-check {
+  width: 40px; height: 40px; border-radius: 50%; border: 2.5px dashed var(--borde);
+  background: none; font-size: 19px; cursor: pointer; flex-shrink: 0;
+  color: transparent; display: flex; align-items: center; justify-content: center;
+}
+.rutina-check.lista {
+  border: none; background: linear-gradient(135deg, #9b87e8, #7c63d8);
+  color: #fff; animation: pop-check .4s cubic-bezier(.3,1.6,.4,1);
+}
+.rutina-progreso {
+  height: 10px; border-radius: 100px; background: var(--seg); overflow: hidden; margin: 8px 0 12px;
+}
+.rutina-progreso div {
+  height: 100%; background: linear-gradient(90deg, #9b87e8, #7c63d8);
+  border-radius: 100px; transition: width .5s cubic-bezier(.2,.9,.3,1);
+}
+.timer-banner.rutina { background: linear-gradient(135deg, #ddd3ff, #c9bcf5); }
