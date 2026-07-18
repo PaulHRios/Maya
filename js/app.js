@@ -2417,6 +2417,7 @@
         </div>
         <button class="btn-secondary btn-block" id="a-guardar-bebe">Guardar</button>
         <button class="btn-ghost btn-block" data-accion="agregar-bebe" style="margin-top:6px">👶 ＋ Agregar otro bebé (gemelos, el que viene…)</button>
+        <button class="btn-ghost btn-block" data-accion="cambiar-tema">🎨 Cambiar tema de color</button>
       </div>
 
       <div class="card">
@@ -2667,6 +2668,7 @@
         window.scrollTo(0, 0);
       }
       if (a === 'agregar-bebe') hojaAgregarBebe();
+      if (a === 'cambiar-tema') elegirTema(false);
       if (a === 'ver-analisis') {
         tabActual = 'mas';
         vistaMas = 'analisis';
@@ -2795,6 +2797,49 @@
     else renderMas();
   }
 
+  /* ---------- temas de color ---------- */
+  const TEMAS = [
+    { id: '', nombre: 'Original', emoji: '💗', colores: ['#fff5f8', '#f06a9b', '#ffffff'] },
+    { id: 'noche', nombre: 'Noche', emoji: '🌙', colores: ['#191420', '#f06a9b', '#262030'] },
+    { id: 'menta', nombre: 'Menta', emoji: '🌿', colores: ['#f1faf5', '#2eb381', '#ffffff'] },
+    { id: 'lavanda', nombre: 'Lila', emoji: '💜', colores: ['#f5f2ff', '#8b6ef0', '#ffffff'] },
+  ];
+  const LS_TEMA = 'maya.tema.v1';
+
+  function aplicarTema(id) {
+    if (id) document.documentElement.dataset.tema = id;
+    else delete document.documentElement.dataset.tema;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = (TEMAS.find(t => t.id === id) || TEMAS[0]).colores[0];
+  }
+
+  function elegirTema(primeraVez) {
+    if (primeraVez && !$('#sheet').classList.contains('hidden')) return; // no interrumpir
+    const actual = localStorage.getItem(LS_TEMA) || '';
+    abrirSheet(`
+      <h2>${primeraVez ? '¿De qué color la quieren? 🎨' : 'Tema de color 🎨'}</h2>
+      ${primeraVez ? '<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Cada teléfono puede tener el suyo, y se puede cambiar cuando quieran en Ajustes.</p>' : ''}
+      <div class="temas-grid">
+        ${TEMAS.map(t => `
+          <button class="tema-opcion ${actual === t.id ? 'activo' : ''}" data-tema-op="${t.id}">
+            <div class="bolitas">${t.colores.map(c => `<span style="background:${c}"></span>`).join('')}</div>
+            ${t.emoji} ${t.nombre}
+          </button>`).join('')}
+      </div>
+    `);
+    document.querySelectorAll('[data-tema-op]').forEach(b => b.onclick = () => {
+      const id = b.dataset.temaOp;
+      localStorage.setItem(LS_TEMA, id);
+      aplicarTema(id);
+      cerrarSheet();
+      const t = TEMAS.find(x => x.id === id);
+      toast(`${t.emoji} Tema ${t.nombre} aplicado`);
+    });
+  }
+
+  // aplicar el tema guardado desde el arranque (antes del login incluso)
+  aplicarTema(localStorage.getItem(LS_TEMA) || '');
+
   /* ============================================================
      arranque
   ============================================================ */
@@ -2835,6 +2880,10 @@
     // una sola vez por teléfono: ¿de quién es este dispositivo?
     if (!Store.getDispositivo()) {
       setTimeout(preguntarDispositivo, 600);
+    }
+    // primera vez en este teléfono: elegir tema de color
+    if (localStorage.getItem(LS_TEMA) === null) {
+      setTimeout(() => elegirTema(true), Store.getDispositivo() ? 700 : 1600);
     }
 
     if (Store.canSync()) {
