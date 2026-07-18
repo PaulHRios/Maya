@@ -137,5 +137,79 @@ const Analisis = (() => {
     return { estado, hallazgos: h, confianza };
   }
 
-  return { generar };
+  /* ---------- lo común en cada etapa (guía anticipada) ----------
+     Ventanas en semanas de vida. `compra` sugiere qué ir consiguiendo. */
+  const ETAPAS_COMUNES = [
+    {
+      key: 'reflejos', desde: 0, hasta: 8, emoji: '🤧',
+      titulo: 'Hipo, estornudos y respiración irregular',
+      texto: 'A esta edad son normalísimos: su sistema nervioso está madurando. El hipo no le molesta tanto como parece.',
+      alivio: ['No hace falta “quitarle” el hipo; pasa solo.', 'Estornudar seguido no es resfriado: es su forma de limpiar la nariz.'],
+    },
+    {
+      key: 'brotes', desde: 1, hasta: 7, emoji: '📈',
+      titulo: 'Brotes de crecimiento (≈10 días, 3 y 6 semanas)',
+      texto: 'De repente pide comer a cada rato y anda inquieta 1–3 días. No es que falte leche: está "ordenando" más producción.',
+      alivio: ['Ofrecer pecho/biberón a libre demanda esos días.', 'Suele normalizarse solo en 2–3 días.'],
+    },
+    {
+      key: 'piel', desde: 2, hasta: 8, emoji: '🌸',
+      titulo: 'Acné del bebé y costra láctea',
+      texto: 'Granitos en cara y escamitas en la cabeza son comunes por las hormonas del embarazo. No duelen y se van solos.',
+      alivio: ['No exprimir ni tallar; lavar solo con agua tibia.', 'Para la costra: aceite de bebé 15 min antes del baño y cepillo suave.'],
+    },
+    {
+      key: 'colicos', desde: 2, hasta: 14, emoji: '🌆',
+      titulo: 'Cólicos y la “hora bruja” (tarde-noche)',
+      texto: 'Entre las semanas 2 y 12–14, muchos bebés lloran más al atardecer sin causa clara, con pico cerca de la semana 6. Es agotador pero normal y pasa.',
+      alivio: ['Las 5 “S”: envolverla, de ladito en brazos, shhh fuerte (ruido blanco), mecerla suave, dejarla succionar.', 'Bicicleta con las piernas y masaje de pancita en círculos.', 'Turnarse — la bitácora de vigilia les dice qué funcionó.'],
+      compra: 'Una app o bocina de ruido blanco ayuda mucho; gotas anticólico solo si el pediatra las indica.',
+    },
+    {
+      key: 'vacunas2m', desde: 6, hasta: 9, emoji: '💉',
+      titulo: 'Se acercan las vacunas de los 2 meses',
+      texto: 'Ronda grande de vacunas. Puede haber molestia, fiebre baja y sueño extra 1–2 días después.',
+      alivio: ['Pecho o leche durante/después del piquete calma de verdad.', 'Piel con piel esa tarde.', 'Medicamento para fiebre solo con dosis del pediatra.'],
+    },
+    {
+      key: 'babas', desde: 8, hasta: 16, emoji: '🤤',
+      titulo: 'Baba a mares y manos a la boca',
+      texto: 'Alrededor de los 2–3 meses babean muchísimo y se comen las manos. Todavía no suelen ser los dientes: es exploración y glándulas madurando.',
+      alivio: ['Baberos y cambiar la ropita húmeda para evitar rozaduras en el cuello.'],
+    },
+    {
+      key: 'regresion4m', desde: 14, hasta: 22, emoji: '😵‍💫',
+      titulo: 'La “regresión” del sueño de los 4 meses',
+      texto: 'Su sueño madura a ciclos como los de adulto y puede despertar más seguido unas semanas. No es que algo esté mal.',
+      alivio: ['Rutina corta y constante antes de dormir (baño, toma, canción).', 'Acostarla somnolienta pero despierta ayuda a que hile ciclos.', 'Ventanas de despierto de ~90–120 min a esta edad.'],
+    },
+    {
+      key: 'dientes', desde: 16, hasta: 30, emoji: '🦷',
+      titulo: 'Probablemente vienen los dientitos',
+      texto: 'Entre los 4 y 7 meses suelen asomarse los primeros (los de abajo al frente). Señales: encías hinchadas, más baba, muerde todo, irritabilidad.',
+      alivio: ['Mordedera refrigerada (fría, nunca congelada).', 'Masajear la encía con un dedo limpio o gasita fría.', 'Los geles con benzocaína NO se recomiendan; medicamento solo con el pediatra.'],
+      compra: 'Ve comprando: mordedera refrigerable, baberos absorbentes y crema barrera para la barbilla.',
+    },
+    {
+      key: 'solidos', desde: 21, hasta: 27, emoji: '🥑',
+      titulo: 'Se acerca la comida sólida (≈6 meses)',
+      texto: 'Cerca de los 6 meses, si ya se sienta con apoyo y muestra interés por tu plato, llega la alimentación complementaria.',
+      alivio: ['La leche sigue siendo el alimento principal hasta el año.', 'Empezar con papillas o trozos blanditos (método que el pediatra recomiende).'],
+      compra: 'Ve consiguiendo: silla alta estable, cucharas suaves y baberos con bolsillo.',
+    },
+    {
+      key: 'separacion', desde: 30, hasta: 44, emoji: '🫣',
+      titulo: 'Ansiedad de separación',
+      texto: 'Entre los 7 y 10 meses muchos lloran cuando mamá o papá salen del cuarto: ya entiende que existen aunque no los vea. Es un avance, no un retroceso.',
+      alivio: ['Despedidas cortas y alegres, sin escaparse a escondidas.', 'Jugar peekaboo ensaya justo esto (está en sus Retos).'],
+    },
+  ];
+
+  function comunes(edadDias) {
+    if (edadDias === null) return [];
+    const sem = Math.floor(edadDias / 7);
+    return ETAPAS_COMUNES.filter(e => sem >= e.desde && sem < e.hasta);
+  }
+
+  return { generar, comunes };
 })();

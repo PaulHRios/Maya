@@ -1803,9 +1803,47 @@
           <div><b>${esc(x.titulo)}</b>${esc(x.texto)}
           ${x.dato ? `<div class="h-dato">📎 ${esc(x.dato)}</div>` : ''}</div>
         </div>`).join('') || '<div class="empty-state"><span class="big">🤖</span>Registra tomas y pañales para que pueda analizar cómo va.</div>'}
+      ${(() => {
+        const com = Analisis.comunes(edadDias());
+        if (!com.length) return '';
+        return `<h2 class="section-title" style="margin-top:20px">En esta etapa es común 🗓️</h2>` + com.map(e => `
+          <div class="hallazgo nivel-info">
+            <span class="h-emoji">${e.emoji}</span>
+            <div><b>${esc(e.titulo)}</b>${esc(e.texto)}
+              ${e.alivio ? `<ul class="h-lista">${e.alivio.map(a => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
+              ${e.compra ? `<div class="h-dato">🛍️ ${esc(e.compra)}</div>` : ''}
+            </div>
+          </div>`).join('');
+      })()}
       <p class="disclaimer">Análisis hecho aquí en el teléfono con sus propios registros y guías generales de pediatría. Orienta, pero nunca sustituye a su pediatra.</p>
     `;
     bindVolver();
+  }
+
+  /* pop-up una sola vez cuando el bebé entra a una etapa nueva */
+  function avisoEtapaNueva() {
+    const dias = edadDias();
+    if (dias === null || !$('#sheet').classList.contains('hidden')) return;
+    const clave = `maya.avisos-etapa.${Store.bebeActivo}`;
+    let vistos = [];
+    try { vistos = JSON.parse(localStorage.getItem(clave)) || []; } catch {}
+    const pend = Analisis.comunes(dias).filter(e => !vistos.includes(e.key));
+    if (!pend.length) return;
+    const e = pend[pend.length - 1]; // la etapa más reciente primero
+    abrirSheet(`
+      <div style="text-align:center;font-size:52px;margin:4px 0 8px">${e.emoji}</div>
+      <h2 style="text-align:center">${esc(e.titulo)}</h2>
+      <p style="font-size:14.5px;line-height:1.5;color:var(--text-2);margin-bottom:12px">${esc(e.texto)}</p>
+      ${e.alivio ? `<div class="care-box"><h4>💡 Para reducir las molestias</h4><ul>${e.alivio.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>` : ''}
+      ${e.compra ? `<div class="info-box" style="margin-top:10px"><h4>🛍️ Consejo de compras</h4>${esc(e.compra)}</div>` : ''}
+      <p class="disclaimer">Aviso por su edad (${Math.floor(dias / 7)} semanas). Guía general — su pediatra siempre manda.</p>
+      <button class="btn-primary btn-block" id="etapa-ok" style="margin-top:10px">Entendido 💗</button>
+    `);
+    $('#etapa-ok').onclick = () => {
+      vistos.push(e.key);
+      localStorage.setItem(clave, JSON.stringify(vistos));
+      cerrarSheet();
+    };
   }
 
   /* ============================================================
@@ -2891,6 +2929,8 @@
     if (localStorage.getItem(LS_TEMA) === null) {
       setTimeout(() => elegirTema(true), Store.getDispositivo() ? 700 : 1600);
     }
+    // aviso de etapa nueva (cólicos, dientes…), uno por vez
+    setTimeout(avisoEtapaNueva, 2600);
 
     if (Store.canSync()) {
       await Store.syncNow();

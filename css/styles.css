@@ -808,3 +808,8 @@ canvas.chart { width: 100% !important; }
 .tema-opcion.activo { border-color: var(--pink-deep); }
 .tema-opcion .bolitas { display: flex; gap: 5px; }
 .tema-opcion .bolitas span { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid rgba(0,0,0,.08); }
+
+/* guía de etapa en el análisis */
+.hallazgo.nivel-info { border-left: 4px solid #8b6ef0; }
+.h-lista { padding-left: 18px; margin: 6px 0 2px; color: var(--text-2); font-size: 13px; }
+.h-lista li { margin-bottom: 3px; }
