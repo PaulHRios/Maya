@@ -60,16 +60,59 @@
     toastTimer = setTimeout(() => t.classList.add('hidden'), 2200);
   }
 
+  let sheetTrigger = null;
+  const sheetFocusable = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+
   function abrirSheet(html) {
+    const sheet = $('#sheet');
+    const appRoot = $('#app');
+    const estabaCerrada = sheet.classList.contains('hidden');
+    if (estabaCerrada && document.activeElement instanceof HTMLElement) sheetTrigger = document.activeElement;
     $('#sheet-content').innerHTML = html;
-    $('#sheet').classList.remove('hidden');
+    sheet.classList.remove('hidden');
     $('#sheet-backdrop').classList.remove('hidden');
+    document.body.classList.add('sheet-open');
+    const titulo = $('#sheet-content h2');
+    sheet.setAttribute('aria-label', titulo ? titulo.textContent.trim() : 'Formulario');
+    sheet.focus({ preventScroll: true });
+    appRoot.setAttribute('inert', '');
+    appRoot.setAttribute('aria-hidden', 'true');
+    requestAnimationFrame(() => (sheet.querySelector(sheetFocusable) || sheet).focus());
   }
   function cerrarSheet() {
+    const appRoot = $('#app');
     $('#sheet').classList.add('hidden');
     $('#sheet-backdrop').classList.add('hidden');
+    document.body.classList.remove('sheet-open');
+    appRoot.removeAttribute('inert');
+    appRoot.removeAttribute('aria-hidden');
+    if (sheetTrigger && sheetTrigger.isConnected) sheetTrigger.focus();
+    sheetTrigger = null;
   }
   $('#sheet-backdrop').addEventListener('click', cerrarSheet);
+  $('#sheet-close').addEventListener('click', cerrarSheet);
+  $('#sheet').addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); cerrarSheet(); return; }
+    if (e.key !== 'Tab') return;
+    const elementos = [...$('#sheet').querySelectorAll(sheetFocusable)]
+      .filter(el => !el.hidden && el.offsetParent !== null);
+    if (!elementos.length) { e.preventDefault(); $('#sheet').focus(); return; }
+    const primero = elementos[0], ultimo = elementos[elementos.length - 1];
+    if (e.shiftKey && document.activeElement === primero) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus(); }
+  });
+
+  const privacyBtn = $('#btn-privacy');
+  privacyBtn.addEventListener('click', () => {
+    const activo = document.body.classList.toggle('privacy-mode');
+    const settingsBtn = $('#btn-settings');
+    privacyBtn.setAttribute('aria-pressed', String(activo));
+    privacyBtn.setAttribute('aria-label', activo ? 'Desactivar modo discreto' : 'Activar modo discreto');
+    privacyBtn.textContent = activo ? '◎' : '◉';
+    settingsBtn.disabled = activo;
+    settingsBtn.setAttribute('aria-label', activo ? 'Ajustes no disponibles en modo discreto' : 'Ajustes');
+    toast(activo ? 'Modo discreto activado' : 'Información visible');
+  });
 
   /* ---------- agrupar registros por día ---------- */
   function porDia(items, campoFecha) {
@@ -94,8 +137,8 @@
 
   const btnsEntrada = (col, id) => `
     <div class="entry-actions">
-      <button data-edit="${col}:${id}">✏️</button>
-      <button data-del="${col}:${id}">🗑️</button>
+      <button type="button" data-edit="${col}:${id}" aria-label="Editar registro">✏️</button>
+      <button type="button" data-del="${col}:${id}" aria-label="Eliminar registro">🗑️</button>
     </div>`;
 
   /* ============================================================
@@ -148,6 +191,21 @@
     const pipiHoy = d.panales.filter(p => esHoy(p.hora) && (p.tipo === 'pipi' || p.tipo === 'mixto')).length;
     // pañales físicos gastados: cada registro es un pañal (mixto cuenta uno)
     const panalesHoy = d.panales.filter(p => esHoy(p.hora)).length;
+    const inicioHoy = new Date(hoy); inicioHoy.setHours(0, 0, 0, 0);
+    const minSuenoHoy = Math.round((d.suenos || []).reduce((total, s) => {
+      if (!s.fin) return total;
+      const inicio = new Date(s.inicio).getTime();
+      const fin = new Date(s.fin).getTime();
+      if (!Number.isFinite(inicio) || !Number.isFinite(fin)) return total;
+      return total + Math.max(0, Math.min(fin, Date.now()) - Math.max(inicio, inicioHoy.getTime()));
+    }, 0) / 60000);
+    const suenoHoy = minSuenoHoy >= 60
+      ? `${Math.floor(minSuenoHoy / 60)} h ${minSuenoHoy % 60} min`
+      : `${minSuenoHoy} min`;
+    const dias = edadDias();
+    const edad = dias === null ? 'Perfil familiar' : dias < 14 ? `${dias} días` : `${Math.floor(dias / 7)} semanas`;
+    const saludo = hoy.getHours() < 12 ? 'Buenos días' : hoy.getHours() < 19 ? 'Buenas tardes' : 'Buenas noches';
+    const nombreBebe = esc(d.bebe.nombre || 'tu bebé');
 
     const nombreTipo = { materno: 'Leche materna', donante: 'Leche extraída', formula: 'Fórmula' };
     const descToma = t => {
@@ -160,61 +218,89 @@
     };
 
     main.innerHTML = `
-      ${bannerFotoSemanal()}
-      <div class="quick-actions">
-        <button class="quick-btn" data-accion="toma-izq"><span>🤱</span>Pecho izq.</button>
-        <button class="quick-btn" data-accion="toma-der"><span>🤱</span>Pecho der.</button>
-        <button class="quick-btn" data-accion="dormir"><span>😴</span>A dormir</button>
-        <button class="quick-btn" data-accion="panal-pipi"><span>💧</span>Pipí</button>
-        <button class="quick-btn" data-accion="panal-popo"><span>💩</span>Popó</button>
-        <button class="quick-btn" data-accion="biberon"><span>🍼</span>Biberón</button>
-      </div>
-
-      <div class="stats-grid">
-        <div class="stat-card bg-peach">
-          <span class="stat-emoji">🍼</span>
-          <span class="stat-value">${tomasHoy.length} tomas</span>
-          <span class="stat-label">${mlHoy ? `${mlHoy} ml` : ''}${mlHoy && minPechoHoy ? ' · ' : ''}${minPechoHoy ? `${minPechoHoy} min pecho` : (mlHoy ? '' : 'hoy')}</span>
-          <span class="stat-ago">${ultToma ? `última ${hace(ultToma.inicio)}` : ''}</span>
-        </div>
-        <div class="stat-card bg-yellow">
-          <span class="stat-emoji">🧷</span>
-          <span class="stat-value">${panalesHoy} pañal${panalesHoy === 1 ? '' : 'es'}</span>
-          <span class="stat-label">gastados hoy</span>
-          <span class="stat-ago">${ultPanal ? `último ${hace(ultPanal.hora)}` : ''}</span>
-        </div>
-        <div class="stat-card bg-blue">
-          <span class="stat-emoji">💧</span>
-          <span class="stat-value">${pipiHoy} pipí</span>
-          <span class="stat-label">hoy</span>
-        </div>
-        <div class="stat-card bg-mint">
-          <span class="stat-emoji">💩</span>
-          <span class="stat-value">${popoHoy} popó</span>
-          <span class="stat-label">hoy</span>
-        </div>
-      </div>
-
-      <div style="margin-top:14px">${bancoCardInicio()}</div>
-      ${(() => {
-        const r = Analisis.generar(Store.data, edadDias());
-        return `<div class="analisis-mini" data-accion="ver-analisis">
-          <span class="am-emoji">${r.estado.emoji}</span>
-          <span class="am-texto">${r.estado.titulo}<span class="am-sub">${r.hallazgos.length} punto${r.hallazgos.length === 1 ? '' : 's'} en su análisis de hoy · toca para ver</span></span>
-          <span class="mi-chev" style="color:#d4c6cd">›</span>
-        </div>`;
-      })()}
-
-      <div class="card">
-        <h2>Última toma</h2>
-        <div class="card-row">
-          <div>
-            <div style="font-weight:700">${descToma(ultToma)}</div>
-            ${ultToma ? `<div style="font-size:13px;color:var(--text-2);margin-top:2px">${fmtDia(ultToma.inicio)} a las ${fmtHora(ultToma.inicio)} · ${hace(ultToma.inicio)}${etiquetaAutor(ultToma)}</div>` : ''}
+      <section class="home-hero" aria-labelledby="home-title">
+        <div class="home-hero-copy">
+          <p class="eyebrow">${fmtFechaLarga(hoy)}</p>
+          <h2 id="home-title">${saludo}, así va el día de ${nombreBebe}</h2>
+          <p>${ultToma ? `La última toma fue ${hace(ultToma.inicio)}.` : 'El día está listo para su primer registro.'}</p>
+          <div class="home-glance" aria-label="Resumen rápido de hoy">
+            <span><b>${tomasHoy.length}</b> tomas</span>
+            <span><b>${panalesHoy}</b> pañales</span>
+            <span><b>${suenoHoy}</b> de sueño</span>
           </div>
         </div>
+        <div class="home-age" aria-label="Edad: ${edad}"><span>♥</span><strong>${edad}</strong></div>
+      </section>
+
+      <div class="home-layout">
+        <section class="home-primary" aria-label="Acciones y resumen del día">
+          ${bannerFotoSemanal()}
+          <div class="home-section-heading">
+            <div><p class="eyebrow">Registro rápido</p><h2>¿Qué pasó?</h2></div>
+            <span>Un toque</span>
+          </div>
+          <div class="quick-actions">
+            <button type="button" class="quick-btn" data-accion="toma-izq"><span>🤱</span>Pecho izq.</button>
+            <button type="button" class="quick-btn" data-accion="toma-der"><span>🤱</span>Pecho der.</button>
+            <button type="button" class="quick-btn" data-accion="dormir"><span>😴</span>A dormir</button>
+            <button type="button" class="quick-btn" data-accion="panal-pipi"><span>💧</span>Pipí</button>
+            <button type="button" class="quick-btn" data-accion="panal-popo"><span>💩</span>Popó</button>
+            <button type="button" class="quick-btn" data-accion="biberon"><span>🍼</span>Biberón</button>
+          </div>
+
+          <div class="home-section-heading compact">
+            <div><p class="eyebrow">Hoy</p><h2>Resumen</h2></div>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-card bg-peach">
+              <span class="stat-emoji">🍼</span>
+              <span class="stat-value">${tomasHoy.length} tomas</span>
+              <span class="stat-label">${mlHoy ? `${mlHoy} ml` : ''}${mlHoy && minPechoHoy ? ' · ' : ''}${minPechoHoy ? `${minPechoHoy} min pecho` : (mlHoy ? '' : 'hoy')}</span>
+              <span class="stat-ago">${ultToma ? `última ${hace(ultToma.inicio)}` : ''}</span>
+            </div>
+            <div class="stat-card bg-yellow">
+              <span class="stat-emoji">🧷</span>
+              <span class="stat-value">${panalesHoy} pañal${panalesHoy === 1 ? '' : 'es'}</span>
+              <span class="stat-label">gastados hoy</span>
+              <span class="stat-ago">${ultPanal ? `último ${hace(ultPanal.hora)}` : ''}</span>
+            </div>
+            <div class="stat-card bg-blue">
+              <span class="stat-emoji">💧</span>
+              <span class="stat-value">${pipiHoy} pipí</span>
+              <span class="stat-label">hoy</span>
+            </div>
+            <div class="stat-card bg-mint">
+              <span class="stat-emoji">💩</span>
+              <span class="stat-value">${popoHoy} popó</span>
+              <span class="stat-label">hoy</span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="home-secondary" aria-label="Contexto del día">
+          ${bancoCardInicio()}
+          ${(() => {
+            const r = Analisis.generar(Store.data, edadDias());
+            return `<button type="button" class="analisis-mini" data-accion="ver-analisis">
+              <span class="am-emoji">${r.estado.emoji}</span>
+              <span class="am-texto">${r.estado.titulo}<span class="am-sub">${r.hallazgos.length} punto${r.hallazgos.length === 1 ? '' : 's'} en su análisis de hoy · toca para ver</span></span>
+              <span class="mi-chev" aria-hidden="true">›</span>
+            </button>`;
+          })()}
+
+          <div class="card home-last-card">
+            <p class="eyebrow">Registro más reciente</p>
+            <h2>Última toma</h2>
+            <div class="card-row">
+              <div>
+                <div class="home-last-value">${descToma(ultToma)}</div>
+                ${ultToma ? `<div class="home-last-meta">${fmtDia(ultToma.inicio)} a las ${fmtHora(ultToma.inicio)} · ${hace(ultToma.inicio)}${etiquetaAutor(ultToma)}</div>` : ''}
+              </div>
+            </div>
+          </div>
+          ${condicionesResumen()}
+        </aside>
       </div>
-      ${condicionesResumen()}
     `;
   }
 
@@ -3141,10 +3227,24 @@
   }
 
   function render() {
+    main.dataset.view = vistaMas ? `mas-${vistaMas}` : tabActual;
+    document.querySelectorAll('.tab').forEach(t => {
+      const activa = t.dataset.tab === tabActual;
+      t.classList.toggle('active', activa);
+      if (activa) t.setAttribute('aria-current', 'page');
+      else t.removeAttribute('aria-current');
+    });
     renderBebesBar();
     renderTimers();
     actualizarHeader();
-    $('#sync-dot').className = `sync-dot ${Store.syncState !== 'off' ? Store.syncState : ''}`;
+    const syncDot = $('#sync-dot');
+    syncDot.className = `sync-dot ${Store.syncState !== 'off' ? Store.syncState : ''}`;
+    syncDot.setAttribute('aria-label', ({
+      off: 'Sincronización desactivada',
+      ok: 'Sincronización al día',
+      busy: 'Sincronizando',
+      error: 'Error de sincronización',
+    })[Store.syncState] || 'Estado de sincronización');
     if (tabActual === 'inicio') renderInicio();
     else if (tabActual === 'comida') renderComida();
     else if (tabActual === 'sueno') renderSueno();
@@ -3260,7 +3360,7 @@
 
   /* ---------- temas de color ---------- */
   const TEMAS = [
-    { id: '', nombre: 'Original', emoji: '💗', colores: ['#fff5f8', '#f06a9b', '#ffffff'] },
+    { id: '', nombre: 'Original', emoji: '💗', colores: ['#fbf7f6', '#e87596', '#fffefd'] },
     { id: 'noche', nombre: 'Noche', emoji: '🌙', colores: ['#191420', '#f06a9b', '#262030'] },
     { id: 'menta', nombre: 'Menta', emoji: '🌿', colores: ['#f1faf5', '#2eb381', '#ffffff'] },
     { id: 'lavanda', nombre: 'Lila', emoji: '💜', colores: ['#f5f2ff', '#8b6ef0', '#ffffff'] },
