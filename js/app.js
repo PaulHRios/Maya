@@ -1791,12 +1791,17 @@
         duracionSeg, modo: modo || 'normal', notas: $('#f-notas').value.trim(),
       });
       cerrarSheet();
+      const promSesion = exts.length >= 5 ? exts.reduce((s, m) => s + Number(m.ml), 0) / exts.length : null;
       if (exts.length >= 3 && ml > maxSesion) {
         confeti(100);
         celebracion('🏆', '¡Nuevo récord de sesión!', `${ml} ml en una sola extracción`);
       } else if (Object.keys(porDia).length >= 2 && totalHoy > maxDiaPrevio) {
         confeti(80);
         celebracion('🥇', '¡Récord de producción diaria!', `${totalHoy} ml extraídos hoy`);
+      } else if (promSesion && ml < promSesion * 0.6) {
+        // sesión floja: ánimo, no números fríos
+        celebracion('💗', 'Tranquila, es normal', `Hay sesiones y días con menos leche — no dice nada de ti. Respira, toma agua y date un respiro 🤍`);
+        setTimeout(() => toast(`🥛 +${ml} ml guardados · cada gota cuenta`), 3600);
       } else {
         toast(`🥛 +${ml} ml al ${lugar === 'congelador' ? 'congelador' : 'refri'}`);
       }
@@ -1846,6 +1851,11 @@
 
   function tipsProduccion(s) {
     const tips = [];
+    // día flojo: primero el ánimo, luego la técnica
+    const sesionesHoy = s.exts.filter(m => fechaLocal(m.fecha) === fechaLocal()).length;
+    if (s.promedio > 30 && sesionesHoy >= 2 && s.hoy < s.promedio * 0.7) {
+      tips.push({ emoji: '💗', texto: `Hoy va más bajito que tu promedio y está bien — la producción varía con el sueño, el estrés y las hormonas, no con cuánto te esfuerzas. Hidrátate, respira hondo antes de la siguiente sesión y, si puedes, tómate un respiro de 10 minutos. Mañana es otro día. 🤍` });
+    }
     if (s.tendencia !== null && s.tendencia <= -10) {
       tips.push({ emoji: '⚡', texto: `La producción bajó ~${Math.abs(s.tendencia)}% estos días. Prueba el Power pumping (o el exprés si no hay una hora) 1 vez al día durante 3–7 días — está en el timer de arriba y te guía con las fases.` });
     }
@@ -2141,6 +2151,12 @@
       <h2 class="section-title">Más</h2>
       <div class="menu-list">
         ${item('analisis', '🤖', 'bg-mint', 'Análisis general', 'Cómo va y qué observar, según sus datos')}
+        ${(() => { const r = EPDS.resultados(); return `
+        <button class="menu-item" data-accion="epds">
+          <span class="mi-emoji bg-mint">💚</span>
+          <span>Bienestar de mamá<span class="mi-sub">${r.length ? `Último chequeo: ${new Date(r[r.length - 1].fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}` : 'Un chequeo para ti, no solo para la bebé'}</span></span>
+          <span class="mi-chev">›</span>
+        </button>`; })()}
         ${item('banco', '🥛', 'bg-blue', 'Banco de leche', (() => { const s = saldosBanco(); return `${s.refri} ml listos · ${s.cong} ml congelados`; })())}
         ${item('salud', '🩺', 'bg-pink', 'Condiciones médicas', d.condiciones.length ? d.condiciones.map(c => c.nombre).join(', ') : 'Ictericia, seguimiento de labs…')}
         ${item('intervenciones', '💉', 'bg-peach', 'Intervenciones', d.intervenciones.length ? `${d.intervenciones.length} registradas` : 'Toma de sangre, vacunas, estudios…')}
@@ -3005,6 +3021,7 @@
       }
       if (a === 'agregar-bebe') hojaAgregarBebe();
       if (a === 'cambiar-tema') elegirTema(false);
+      if (a === 'epds') hojaEPDS();
       if (a === 'ver-analisis') {
         tabActual = 'mas';
         vistaMas = 'analisis';
@@ -3136,6 +3153,111 @@
     else renderMas();
   }
 
+  /* ---------- bienestar de mamá (EPDS) ---------- */
+  function hojaEPDS() {
+    const respuestas = [];
+    let i = 0;
+
+    const pintar = () => {
+      const q = EPDS.PREGUNTAS[i];
+      $('#sheet-content').innerHTML = `
+        <h2>Sobre ti 💚</h2>
+        <p style="font-size:12.5px;color:var(--text-2)">En los últimos 7 días… · pregunta ${i + 1} de 10</p>
+        <div class="rutina-progreso"><div style="width:${Math.round((i / 10) * 100)}%"></div></div>
+        <p style="font-size:16.5px;font-weight:800;margin:10px 0 14px">${esc(q.texto)}</p>
+        ${q.ops.map(([txt, val], j) => `
+          <button class="epds-op" data-val="${val}">${esc(txt)}</button>`).join('')}
+        <p class="disclaimer">Tus respuestas solo se guardan en TU teléfono; no se suben a la nube ni las ve nadie más.</p>
+      `;
+      document.querySelectorAll('.epds-op').forEach(b => b.onclick = () => {
+        respuestas.push(Number(b.dataset.val));
+        i++;
+        if (i < EPDS.PREGUNTAS.length) pintar();
+        else terminar();
+      });
+    };
+
+    const terminar = () => {
+      const total = respuestas.reduce((s, v) => s + v, 0);
+      const q10 = respuestas[9];
+      EPDS.guardarResultado(total, q10);
+      const nivel = EPDS.interpretar(total, q10);
+      const nombre = esc(Store.data.bebe.mama || 'mamá');
+      const recursos = EPDS.RECURSOS.map(r => `
+        <a class="epds-recurso" href="${r.url}" target="_blank" rel="noopener">${r.emoji} ${esc(r.texto)}</a>`).join('');
+
+      let cuerpo = '';
+      if (nivel === 'urgente') {
+        cuerpo = `
+          <div class="analisis-estado" style="background:linear-gradient(135deg,#e25555,#c73e3e)">
+            <span class="ae-emoji">🫂</span>
+            <div><div class="ae-titulo">No estás sola, ${nombre}</div>
+            <div class="ae-sub">Indicaste pensamientos de hacerte daño. Eso merece atención HOY, no mañana.</div></div>
+          </div>
+          <p style="font-size:14.5px;line-height:1.5;margin-bottom:10px">Por favor díselo ahora a ${esc(Store.data.bebe.papa || 'tu pareja')} o a alguien de confianza, y llama a una línea de apoyo — es gratis, es confidencial y ayudan de verdad. Si sientes que puedes hacerte daño en este momento, llama al <b>911</b>.</p>
+          ${recursos}`;
+      } else if (nivel === 'alto') {
+        cuerpo = `
+          <div class="analisis-estado" style="background:linear-gradient(135deg,#e2865e,#d06a3f)">
+            <span class="ae-emoji">💛</span>
+            <div><div class="ae-titulo">Mereces apoyo, ${nombre}</div>
+            <div class="ae-sub">Puntaje ${total}/30 — sugiere síntomas importantes de depresión posparto.</div></div>
+          </div>
+          <p style="font-size:14.5px;line-height:1.5;margin-bottom:10px">La depresión posparto es <b>muy común</b> (1 de cada 7 mamás) y <b>muy tratable</b>. No es debilidad ni significa que seas mala mamá — es una condición médica, como la ictericia de Maya. El mejor paso es hablar esta semana con un especialista perinatal:</p>
+          ${recursos}`;
+      } else if (nivel === 'medio') {
+        cuerpo = `
+          <div class="analisis-estado" style="background:linear-gradient(135deg,#f5b54a,#e79a1f)">
+            <span class="ae-emoji">🌤️</span>
+            <div><div class="ae-titulo">Andas cargando bastante, ${nombre}</div>
+            <div class="ae-sub">Puntaje ${total}/30 — algunos síntomas que vale la pena vigilar.</div></div>
+          </div>
+          <div class="care-box"><h4>💚 Esta semana, con intención</h4><ul>
+            <li>Duerme cuando Maya duerma al menos una vez al día; los pendientes esperan.</li>
+            <li>Cuéntale a ${esc(Store.data.bebe.papa || 'tu pareja')} cómo te sientes, con estas palabras.</li>
+            <li>Sal a la luz del día 15 min, aunque sea al patio con la bebé.</li>
+            <li>Volveremos a preguntarte en una semana. Si esto crece, busca apoyo — abajo hay opciones.</li>
+          </ul></div>
+          ${recursos}`;
+      } else {
+        cuerpo = `
+          <div class="analisis-estado" style="background:linear-gradient(135deg,#4cc38a,#2ea06d)">
+            <span class="ae-emoji">💚</span>
+            <div><div class="ae-titulo">Te ves bien, ${nombre}</div>
+            <div class="ae-sub">Puntaje ${total}/30 — sin señales importantes esta vez.</div></div>
+          </div>
+          <p style="font-size:14px;line-height:1.5;color:var(--text-2)">Gracias por tomarte estos 2 minutos. Cuidarte a ti también es cuidar a Maya. Te volveremos a preguntar más adelante — y si un día te sientes distinta, el test siempre está en Más → Bienestar de mamá.</p>`;
+      }
+
+      $('#sheet-content').innerHTML = `
+        ${cuerpo}
+        <p class="disclaimer">La Escala de Edimburgo es un tamizaje validado, no un diagnóstico; solo un profesional puede diagnosticar. Resultados guardados únicamente en tu teléfono.</p>
+        <button class="btn-primary btn-block" id="epds-cerrar" style="margin-top:10px">Cerrar</button>
+      `;
+      $('#epds-cerrar').onclick = cerrarSheet;
+    };
+
+    abrirSheet('');
+    pintar();
+  }
+
+  function invitarEPDS() {
+    if (!$('#sheet').classList.contains('hidden')) return;
+    const nombre = esc(Store.data.bebe.mama || 'mamá');
+    abrirSheet(`
+      <div style="text-align:center;font-size:50px;margin:4px 0 8px">💚</div>
+      <h2 style="text-align:center">¿Y tú cómo estás, ${nombre}?</h2>
+      <p style="font-size:14.5px;line-height:1.5;color:var(--text-2);margin-bottom:14px">
+        Esta app cuida a Maya, pero Maya te necesita bien a ti. Cada cierto tiempo te haremos
+        un chequeo cortito (2 minutos, 10 preguntas) que usan los médicos de todo el mundo
+        para cuidar el ánimo de las mamás. Es privado: solo tú ves las respuestas.</p>
+      <button class="btn-primary btn-block" id="epds-si">Sí, va — 2 minutos 💚</button>
+      <button class="btn-ghost btn-block" id="epds-luego">Ahora no, en unos días</button>
+    `);
+    $('#epds-si').onclick = () => hojaEPDS();
+    $('#epds-luego').onclick = () => { EPDS.posponer(2); cerrarSheet(); toast('Te pregunto en un par de días 💚'); };
+  }
+
   /* ---------- temas de color ---------- */
   const TEMAS = [
     { id: '', nombre: 'Original', emoji: '💗', colores: ['#fff5f8', '#f06a9b', '#ffffff'] },
@@ -3226,6 +3348,10 @@
     }
     // aviso de etapa nueva (cólicos, dientes…), uno por vez
     setTimeout(avisoEtapaNueva, 2600);
+    // chequeo de bienestar de mamá (solo su teléfono, según calendario)
+    if (Store.getDispositivo() === 'mama') {
+      setTimeout(() => { if (EPDS.tocaChequeo(edadDias())) invitarEPDS(); }, 4200);
+    }
 
     if (Store.canSync()) {
       await Store.syncNow();
