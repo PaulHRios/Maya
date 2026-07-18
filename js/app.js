@@ -196,6 +196,14 @@
       </div>
 
       <div style="margin-top:14px">${bancoCardInicio()}</div>
+      ${(() => {
+        const r = Analisis.generar(Store.data, edadDias());
+        return `<div class="analisis-mini" data-accion="ver-analisis">
+          <span class="am-emoji">${r.estado.emoji}</span>
+          <span class="am-texto">${r.estado.titulo}<span class="am-sub">${r.hallazgos.length} punto${r.hallazgos.length === 1 ? '' : 's'} en su análisis de hoy · toca para ver</span></span>
+          <span class="mi-chev" style="color:#d4c6cd">›</span>
+        </div>`;
+      })()}
 
       <div class="card">
         <h2>Última toma</h2>
@@ -1775,11 +1783,37 @@
     };
   }
 
+  /* ---------- análisis general ---------- */
+  function renderAnalisis() {
+    const r = Analisis.generar(Store.data, edadDias());
+    main.innerHTML = `
+      ${volverMas}
+      <h2 class="section-title">Análisis general 🤖</h2>
+      <div class="analisis-estado" style="background:${r.estado.color}">
+        <span class="ae-emoji">${r.estado.emoji}</span>
+        <div>
+          <div class="ae-titulo">${r.estado.titulo}</div>
+          <div class="ae-sub">${r.estado.sub}</div>
+        </div>
+      </div>
+      ${r.confianza === 'limitada' ? `<p style="font-size:12.5px;color:var(--text-2);margin:-6px 4px 12px">ℹ️ Hay pocos registros en las últimas 24 h, así que el análisis es parcial — entre más registren, más fino se pone.</p>` : ''}
+      ${r.hallazgos.map(x => `
+        <div class="hallazgo nivel-${x.nivel}">
+          <span class="h-emoji">${x.emoji}</span>
+          <div><b>${esc(x.titulo)}</b>${esc(x.texto)}
+          ${x.dato ? `<div class="h-dato">📎 ${esc(x.dato)}</div>` : ''}</div>
+        </div>`).join('') || '<div class="empty-state"><span class="big">🤖</span>Registra tomas y pañales para que pueda analizar cómo va.</div>'}
+      <p class="disclaimer">Análisis hecho aquí en el teléfono con sus propios registros y guías generales de pediatría. Orienta, pero nunca sustituye a su pediatra.</p>
+    `;
+    bindVolver();
+  }
+
   /* ============================================================
      MÁS (menú y subvistas)
   ============================================================ */
   function renderMas() {
     if (vistaMas === 'banco') return renderBanco();
+    if (vistaMas === 'analisis') return renderAnalisis();
     if (vistaMas === 'salud') return renderSalud();
     if (vistaMas === 'intervenciones') return renderIntervenciones();
     if (vistaMas === 'medicamentos') return renderMedicamentos();
@@ -1798,6 +1832,7 @@
     main.innerHTML = `
       <h2 class="section-title">Más</h2>
       <div class="menu-list">
+        ${item('analisis', '🤖', 'bg-mint', 'Análisis general', 'Cómo va y qué observar, según sus datos')}
         ${item('banco', '🥛', 'bg-blue', 'Banco de leche', (() => { const s = saldosBanco(); return `${s.refri} ml listos · ${s.cong} ml congelados`; })())}
         ${item('salud', '🩺', 'bg-pink', 'Condiciones médicas', d.condiciones.length ? d.condiciones.map(c => c.nombre).join(', ') : 'Ictericia, seguimiento de labs…')}
         ${item('intervenciones', '💉', 'bg-peach', 'Intervenciones', d.intervenciones.length ? `${d.intervenciones.length} registradas` : 'Toma de sangre, vacunas, estudios…')}
@@ -2381,6 +2416,7 @@
           </select>
         </div>
         <button class="btn-secondary btn-block" id="a-guardar-bebe">Guardar</button>
+        <button class="btn-ghost btn-block" data-accion="agregar-bebe" style="margin-top:6px">👶 ＋ Agregar otro bebé (gemelos, el que viene…)</button>
       </div>
 
       <div class="card">
@@ -2630,6 +2666,14 @@
         render();
         window.scrollTo(0, 0);
       }
+      if (a === 'agregar-bebe') hojaAgregarBebe();
+      if (a === 'ver-analisis') {
+        tabActual = 'mas';
+        vistaMas = 'analisis';
+        document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'mas'));
+        render();
+        window.scrollTo(0, 0);
+      }
       if (a === 'ext-terminar') terminarExtraccion(false);
       if (a === 'ext-cancelar') { if (confirm('¿Cancelar la extracción sin guardar?')) terminarExtraccion(true); }
       if (a === 'act-terminar') terminarActividad(true);
@@ -2698,7 +2742,48 @@
     $('#header-sub').textContent = sub;
   }
 
+  function renderBebesBar() {
+    const bar = $('#bebes-bar');
+    const bebes = Store.getBebes();
+    if (bebes.length <= 1) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+    bar.classList.remove('hidden');
+    bar.innerHTML = bebes.map(b => `
+      <button class="bebe-chip ${b.id === Store.bebeActivo ? 'activo' : ''}" data-bebe="${b.id}">👶 ${esc(b.nombre)}</button>`).join('')
+      + (bebes.length < 5 ? '<button class="bebe-chip agregar" data-accion="agregar-bebe">＋</button>' : '');
+    bar.querySelectorAll('[data-bebe]').forEach(ch => ch.onclick = async () => {
+      if (ch.dataset.bebe === Store.bebeActivo) return;
+      Store.cambiarBebe(ch.dataset.bebe);
+      toast(`Viendo a ${ch.textContent.replace('👶', '').trim()} 💗`);
+      render();
+      cargarAvatar();
+      if (Store.canSync()) { await Store.syncNow(); render(); }
+    });
+  }
+
+  function hojaAgregarBebe() {
+    if (Store.getBebes().length >= 5) { toast('Máximo 5 bebés'); return; }
+    abrirSheet(`
+      <h2>Agregar otro bebé 👶</h2>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Cada bebé tiene su propio registro completo (tomas, pañales, retos, banco de leche…) y podrán cambiar entre ellos con las pestañitas de arriba. Hasta 5.</p>
+      <div class="form-group"><label>Nombre</label>
+        <input type="text" id="f-nombre-bebe" placeholder="Nombre del bebé">
+      </div>
+      <button class="btn-primary btn-block" id="f-crear">Crear su registro</button>
+    `);
+    $('#f-crear').onclick = () => {
+      const nombre = $('#f-nombre-bebe').value.trim();
+      if (!nombre) { toast('Ponle nombre'); return; }
+      Store.agregarBebe(nombre);
+      cerrarSheet();
+      confeti(80);
+      celebracion('👶', `¡Bienvenida ${nombre}!`, 'Su registro está listo');
+      render();
+      cargarAvatar();
+    };
+  }
+
   function render() {
+    renderBebesBar();
     renderTimers();
     actualizarHeader();
     $('#sync-dot').className = `sync-dot ${Store.syncState !== 'off' ? Store.syncState : ''}`;

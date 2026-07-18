@@ -113,10 +113,63 @@ const Store = (() => {
   const hasSession = () => localStorage.getItem(LS_SESSION) === 'ok';
   const logout = () => localStorage.removeItem(LS_SESSION);
 
+  /* ---------- varios bebés (hasta 5) ----------
+     Cada bebé tiene su propio archivo de datos, timers y avatar.
+     'maya' es el bebé original y conserva sus claves/archivos de siempre. */
+  const LS_BEBES = 'maya.bebes.v1';
+  const LS_BEBE_ACTIVO = 'maya.bebe-activo.v1';
+  const MAX_BEBES = 5;
+
+  let bebeActivo = localStorage.getItem(LS_BEBE_ACTIVO) || 'maya';
+  const kData = id => id === 'maya' ? LS_DATA : `${LS_DATA}.${id}`;
+  const kTimers = id => id === 'maya' ? LS_TIMERS : `${LS_TIMERS}.${id}`;
+  const archivoDatos = id => id === 'maya' ? 'datos/maya.json' : `datos/bebe-${id}.json`;
+
+  function getBebes() {
+    try {
+      const lista = JSON.parse(localStorage.getItem(LS_BEBES)) || [];
+      if (!lista.some(b => b.id === 'maya')) lista.unshift({ id: 'maya', nombre: 'Maya', updatedAt: '' });
+      return lista;
+    } catch { return [{ id: 'maya', nombre: 'Maya', updatedAt: '' }]; }
+  }
+  function guardarBebes(lista) { localStorage.setItem(LS_BEBES, JSON.stringify(lista)); }
+
+  function actualizarPerfilActivo() {
+    const lista = getBebes();
+    const p = lista.find(b => b.id === bebeActivo);
+    const nombre = (data.bebe && data.bebe.nombre) || 'Bebé';
+    if (p && p.nombre !== nombre) { p.nombre = nombre; p.updatedAt = now(); guardarBebes(lista); }
+    else if (!p) { lista.push({ id: bebeActivo, nombre, updatedAt: now() }); guardarBebes(lista); }
+  }
+
+  function cambiarBebe(id) {
+    if (id === bebeActivo) return;
+    localStorage.setItem(kData(bebeActivo), JSON.stringify(data)); // asegurar guardado
+    bebeActivo = id;
+    localStorage.setItem(LS_BEBE_ACTIVO, id);
+    data = emptyData();
+    loadLocal();
+    notify();
+    scheduleSync();
+  }
+
+  function agregarBebe(nombre) {
+    const lista = getBebes();
+    if (lista.length >= MAX_BEBES) return null;
+    const id = uid();
+    lista.push({ id, nombre, updatedAt: now() });
+    guardarBebes(lista);
+    const nuevo = emptyData();
+    nuevo.bebe.nombre = nombre;
+    localStorage.setItem(kData(id), JSON.stringify(nuevo));
+    cambiarBebe(id);
+    return id;
+  }
+
   /* ---------- persistencia local ---------- */
   function loadLocal() {
     try {
-      const raw = localStorage.getItem(LS_DATA);
+      const raw = localStorage.getItem(kData(bebeActivo));
       if (raw) data = Object.assign(emptyData(), JSON.parse(raw));
       const rawCfg = localStorage.getItem(LS_CONFIG);
       if (rawCfg) config = Object.assign(config, JSON.parse(rawCfg));
@@ -127,7 +180,8 @@ const Store = (() => {
   }
 
   function saveLocal() {
-    localStorage.setItem(LS_DATA, JSON.stringify(data));
+    localStorage.setItem(kData(bebeActivo), JSON.stringify(data));
+    actualizarPerfilActivo();
     notify();
     scheduleSync();
   }
@@ -190,25 +244,27 @@ const Store = (() => {
 
   /* foto de perfil: vive en el repo privado; se cachea por dispositivo */
   const LS_AVATAR = 'maya.avatar.v1';
-  function getAvatarCache() { return localStorage.getItem(LS_AVATAR); }
+  const kAvatar = id => id === 'maya' ? LS_AVATAR : `${LS_AVATAR}.${id}`;
+  const archivoAvatar = id => id === 'maya' ? 'fotos/avatar.jpg' : `fotos/avatar-${id}.jpg`;
+  function getAvatarCache() { return localStorage.getItem(kAvatar(bebeActivo)); }
   async function fetchAvatar() {
     if (!canSync()) return getAvatarCache();
     try {
-      const f = await ghGetFile('fotos/avatar.jpg');
+      const f = await ghGetFile(archivoAvatar(bebeActivo));
       if (!f || !f.content) return getAvatarCache();
       const url = `data:image/jpeg;base64,${f.content.replace(/\n/g, '')}`;
-      localStorage.setItem(LS_AVATAR, url);
+      localStorage.setItem(kAvatar(bebeActivo), url);
       return url;
     } catch { return getAvatarCache(); }
   }
 
   /* ---------- timers persistentes (lactancia / sueño) ---------- */
   function getTimers() {
-    try { return JSON.parse(localStorage.getItem(LS_TIMERS)) || {}; }
+    try { return JSON.parse(localStorage.getItem(kTimers(bebeActivo))) || {}; }
     catch { return {}; }
   }
   function setTimers(t) {
-    localStorage.setItem(LS_TIMERS, JSON.stringify(t));
+    localStorage.setItem(kTimers(bebeActivo), JSON.stringify(t));
     notify();
   }
 
@@ -325,8 +381,9 @@ const Store = (() => {
     if (!canSync() || syncing) return;
     syncing = true;
     setSyncState('busy');
+    const idSync = bebeActivo; // por si cambian de bebé a media sincronización
     try {
-      const remoteFile = await ghGetFile('datos/maya.json');
+      const remoteFile = await ghGetFile(archivoDatos(idSync));
       let sha = null;
       if (remoteFile) {
         sha = remoteFile.sha;
@@ -344,17 +401,33 @@ const Store = (() => {
       // primero los registros: una foto atorada nunca debe bloquearlos
       const slim = JSON.parse(JSON.stringify(data));
       slim.fotos = slim.fotos.map(f => { const c = { ...f }; delete c.dataUrl; return c; });
-      await ghPutFile('datos/maya.json', b64encodeUtf8(JSON.stringify(slim, null, 1)), sha, `Registro ${new Date().toLocaleString('es-MX')}`);
+      await ghPutFile(archivoDatos(idSync), b64encodeUtf8(JSON.stringify(slim, null, 1)), sha, `Registro ${new Date().toLocaleString('es-MX')}`);
       config.lastSync = now();
       saveConfig();
-      localStorage.setItem(LS_DATA, JSON.stringify(data));
+      localStorage.setItem(kData(idSync), JSON.stringify(data));
       setSyncState('ok');
       try {
         await syncPhotos();
-        localStorage.setItem(LS_DATA, JSON.stringify(data));
+        localStorage.setItem(kData(idSync), JSON.stringify(data));
       } catch (e) {
         console.error('Fotos pendientes de subir', e);
       }
+      // perfiles de bebés compartidos entre los dos teléfonos
+      try {
+        const pf = await ghGetFile('datos/perfiles.json');
+        const remotos = pf && pf.content ? JSON.parse(b64decodeUtf8(pf.content)) : [];
+        const porId = new Map();
+        [...remotos, ...getBebes()].forEach(p => {
+          const prev = porId.get(p.id);
+          if (!prev || (p.updatedAt || '') > (prev.updatedAt || '')) porId.set(p.id, p);
+        });
+        const fusion = [...porId.values()];
+        guardarBebes(fusion);
+        const json = JSON.stringify(fusion, null, 1);
+        if (!pf || b64decodeUtf8(pf.content) !== json) {
+          await ghPutFile('datos/perfiles.json', b64encodeUtf8(json), pf ? pf.sha : null, 'Perfiles de bebés');
+        }
+      } catch (e) { console.error('Perfiles no sincronizados', e); }
     } catch (e) {
       console.error('Error de sincronización', e);
       setSyncState('error');
@@ -380,6 +453,8 @@ const Store = (() => {
     add, update, remove, onChange,
     marcarActividad, fetchAvatar, getAvatarCache,
     getDispositivo, setDispositivo,
+    getBebes, cambiarBebe, agregarBebe,
+    get bebeActivo() { return bebeActivo; },
     getTimers, setTimers,
     syncNow, scheduleSync, testConnection, canSync, fetchPhoto,
     get data() { return data; },
