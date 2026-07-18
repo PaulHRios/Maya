@@ -1,6 +1,7 @@
-/* ============ Maya — ideas de vínculo y juego ============
-   Sugerencias generales organizadas por edad. No se adaptan a condiciones
-   médicas y siempre requieren supervisión de un adulto. */
+/* ============ Maya — retos y actividades de estimulación ============
+   Genera la lista de actividades del día según la edad de la bebé
+   (en semanas/meses) y sus condiciones médicas activas. Basado en
+   guías de estimulación temprana (AAP, CDC) para cada etapa. */
 
 const Actividades = (() => {
 
@@ -76,6 +77,31 @@ const Actividades = (() => {
     },
   ];
 
+  /* Actividades extra generadas por condiciones médicas activas */
+  const POR_CONDICION = [
+    {
+      claves: ['icteri', 'bilirrub'],
+      tareas: [
+        { key: 'luz', emoji: '☀️', titulo: 'Baño de luz indirecta', min: 10, desc: 'Cerca de una ventana con luz natural indirecta (nunca sol directo). Ayuda a bajar la bilirrubina.', porCondicion: 'Ictericia' },
+        { key: 'tomas-frec', emoji: '🍼', titulo: 'Vigilar tomas frecuentes', desc: 'Comer seguido (8–12 veces al día) ayuda a eliminar la bilirrubina. Revisa que las tomas del día vayan al corriente.', porCondicion: 'Ictericia' },
+      ],
+    },
+    {
+      claves: ['colico', 'cólico', 'gases'],
+      tareas: [
+        { key: 'bici', emoji: '🚲', titulo: 'Bicicleta y masaje de pancita', min: 5, desc: 'Movimientos de bicicleta con sus piernas y masaje en el abdomen en círculos, para los gases.', porCondicion: 'Cólicos' },
+      ],
+    },
+    {
+      claves: ['reflujo'],
+      tareas: [
+        { key: 'erguida', emoji: '🫂', titulo: 'Mantenerla erguida tras comer', min: 20, desc: 'Sostenla vertical 20–30 min después de las tomas para que la leche se asiente.', porCondicion: 'Reflujo' },
+      ],
+    },
+  ];
+
+  const normalizar = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
   function etapaDe(edadDias) {
     const sem = Math.floor(edadDias / 7);
     return ETAPAS.find(e => sem >= e.desde && sem < e.hasta) || ETAPAS[ETAPAS.length - 1];
@@ -97,11 +123,14 @@ const Actividades = (() => {
         extras.push(rotativas[(dia + i) % rotativas.length]);
       }
     }
-    return {
-      etapa,
-      tareas: [...base, ...extras],
-      aviso: 'Ideas generales de juego, siempre con supervisión. Si nació prematura o tiene indicaciones especiales, consulta primero a su profesional de salud.',
-    };
+    const porCond = [];
+    for (const c of (condiciones || [])) {
+      const n = normalizar(c.nombre);
+      for (const grupo of POR_CONDICION) {
+        if (grupo.claves.some(k => n.includes(normalizar(k)))) porCond.push(...grupo.tareas);
+      }
+    }
+    return { etapa, tareas: [...porCond, ...base, ...extras] };
   }
 
   /* ---------- progreso, racha y medallas ---------- */

@@ -72,7 +72,7 @@ const PDFResumen = (() => {
     doc.setFontSize(26);
     doc.setTextColor(217, 79, 132);
     doc.setFont(undefined, 'bold');
-    doc.text(`Resumen de ${d.bebe.nombre || 'Bebé'} 💗`.replace(' 💗', ''), 14, 20);
+    doc.text(`Resumen de ${d.bebe.nombre || 'Maya'} 💗`.replace(' 💗', ''), 14, 20);
     doc.setFontSize(11);
     doc.setFont(undefined, 'normal');
     doc.setTextColor(120, 100, 115);
@@ -272,10 +272,10 @@ const PDFResumen = (() => {
       doc.setPage(i);
       doc.setFontSize(8);
       doc.setTextColor(170, 150, 160);
-      doc.text(`Diario de ${d.bebe.nombre || 'Bebé'} · generado el ${new Date().toLocaleString('es-MX')} · página ${i} de ${pages}`, 14, 290);
+      doc.text(`Diario de ${d.bebe.nombre || 'Maya'} · generado el ${new Date().toLocaleString('es-MX')} · página ${i} de ${pages}`, 14, 290);
     }
 
-    doc.save(`Resumen-${d.bebe.nombre || 'Bebe'}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    doc.save(`Resumen-${d.bebe.nombre || 'Maya'}-${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
   return { generar };
