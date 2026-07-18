@@ -14,6 +14,8 @@ con datos completamente ficticios.
 
 ## Demo para jueces
 
+**Demo público en Sites:** [Abrir Maya](https://maya-baby-tracker-paulhrios.paulintintin.chatgpt.site/)
+
 No se requiere cuenta. Cada URL tiene un escenario sintético aislado:
 
 - `?demo=steady` — registros parecidos al historial reciente.
@@ -24,6 +26,13 @@ No se requiere cuenta. Cada URL tiene un escenario sintético aislado:
 En el demo se puede registrar, navegar, iniciar timers y restablecer el escenario.
 No descarga fotos ni accede al repositorio privado de Maya; usa `sessionStorage`
 en un namespace separado.
+
+El port de Sites añade un diario sincronizado en `/diario`: inicio de sesión con
+ChatGPT, creación de familia y perfiles de bebé, varios bebés por cuenta, CRUD de
+todos los registros, temporizadores persistentes por bebé, fotos privadas en R2,
+respaldo JSON e impresión/PDF. Los registros viven en D1 y nunca se mezclan con
+el demo. El resumen de una cuenta real se calcula localmente con conteos
+observacionales y no envía los datos del bebé a OpenAI.
 
 ## Qué puede registrar
 
@@ -164,8 +173,8 @@ El repositorio incluye:
 - fallback offline y pruebas automatizadas;
 - licencia pública.
 
-Antes de enviar en Devpost faltan tareas no versionables: URL final de Sites,
-video público de menos de tres minutos y el Session ID obtenido con `/feedback`.
+Antes de enviar en Devpost faltan dos tareas no versionables: video público de
+menos de tres minutos y el Session ID obtenido con `/feedback`.
 El guion sugerido está en [docs/demo-script.md](docs/demo-script.md).
 
 ## Licencia
