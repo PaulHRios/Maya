@@ -2,10 +2,13 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Maya</title>
-<meta name="description" content="Registro de salud y cuidados de Maya">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Maya · Baby tracker privado</title>
+<meta name="description" content="Un baby tracker privado, instalable y pensado para compartir el cuidado en familia.">
 <meta name="theme-color" content="#fff5f8">
+<meta name="color-scheme" content="light">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -20,20 +23,71 @@
 <!-- ====== LOGIN ====== -->
 <div id="login-screen" class="login-screen hidden">
   <div class="login-card">
-    <div class="login-icon">💗</div>
-    <h1>Maya</h1>
-    <p class="login-sub">El diario de nuestra bebé</p>
-    <form id="login-form">
-      <input type="text" id="login-user" placeholder="Usuario" autocomplete="username" autocapitalize="none" required>
-      <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password" required>
+    <div class="login-brand" aria-hidden="true"><span>♥</span></div>
+    <h1>Bienvenidos a Maya</h1>
+    <p class="login-sub">Todo el día de tu bebé, claro y en un solo lugar.</p>
+
+    <div class="auth-tabs" role="tablist" aria-label="Acceso">
+      <button type="button" id="auth-login-tab" class="active" role="tab" aria-selected="true" aria-controls="login-form">Iniciar sesión</button>
+      <button type="button" id="auth-create-tab" role="tab" aria-selected="false" aria-controls="create-form">Crear cuenta</button>
+    </div>
+
+    <form id="login-form" role="tabpanel" aria-labelledby="auth-login-tab">
+      <div class="form-group auth-field">
+        <label for="login-user">Usuario</label>
+        <input type="text" id="login-user" autocomplete="username" autocapitalize="none" spellcheck="false" required maxlength="64">
+      </div>
+      <div class="form-group auth-field">
+        <label for="login-pass">Contraseña</label>
+        <input type="password" id="login-pass" autocomplete="current-password" required maxlength="128">
+      </div>
       <button type="submit" class="btn-primary btn-block">Entrar</button>
+      <p id="login-error" class="login-error hidden" role="alert">No pudimos abrir esa cuenta. Revisa tus datos.</p>
     </form>
-    <p id="login-error" class="login-error hidden">Usuario o contraseña incorrectos</p>
+
+    <form id="create-form" class="hidden" role="tabpanel" aria-labelledby="auth-create-tab">
+      <div class="form-row">
+        <div class="form-group auth-field">
+          <label for="create-user">Nuevo usuario</label>
+          <input type="text" id="create-user" autocomplete="username" autocapitalize="none" spellcheck="false" required minlength="3" maxlength="64">
+        </div>
+        <div class="form-group auth-field">
+          <label for="create-baby">Nombre del bebé</label>
+          <input type="text" id="create-baby" autocomplete="off" required maxlength="80">
+        </div>
+      </div>
+      <div class="form-group auth-field">
+        <label for="create-birth">Fecha de nacimiento <span>(opcional)</span></label>
+        <input type="date" id="create-birth">
+      </div>
+      <div class="form-row">
+        <div class="form-group auth-field">
+          <label for="create-pass">Contraseña <span>12+ caracteres</span></label>
+          <input type="password" id="create-pass" autocomplete="new-password" required minlength="12" maxlength="128">
+        </div>
+        <div class="form-group auth-field">
+          <label for="create-pass-confirm">Confirmar</label>
+          <input type="password" id="create-pass-confirm" autocomplete="new-password" required minlength="12" maxlength="128">
+        </div>
+      </div>
+      <label id="legacy-import-row" class="legacy-import hidden"><input type="checkbox" id="create-import-legacy" checked> Importar los registros anteriores guardados en este dispositivo</label>
+      <button type="submit" class="btn-primary btn-block">Crear diario privado</button>
+      <p id="create-error" class="login-error hidden" role="alert"></p>
+      <p class="auth-privacy">La cuenta de esta versión se cifra en este dispositivo. El port de Sites añadirá acceso seguro entre cuidadores.</p>
+    </form>
+
+    <div class="demo-entry">
+      <span>o</span>
+      <button type="button" id="btn-demo-login" class="btn-demo">Explorar demo <small>datos 100% ficticios</small></button>
+      <p>No requiere cuenta y nunca toca tus registros privados.</p>
+    </div>
   </div>
 </div>
 
 <!-- ====== APP ====== -->
 <div id="app" class="app hidden">
+
+  <div id="demo-banner" class="demo-banner hidden" role="status"></div>
 
   <div id="ptr" class="ptr"><span class="ptr-spinner">💗</span></div>
 
@@ -46,7 +100,7 @@
       </div>
     </div>
     <div class="header-right">
-      <span id="sync-dot" class="sync-dot" title="Sincronización"></span>
+      <span id="sync-dot" class="sync-dot" title="Estado de guardado" aria-label="Estado de guardado local"></span>
       <button id="btn-settings" class="icon-btn" aria-label="Ajustes">⚙️</button>
     </div>
   </header>
@@ -56,12 +110,11 @@
 
   <main id="main" class="main"></main>
 
-  <nav class="tabbar">
-    <button class="tab active" data-tab="inicio"><span class="tab-icon">🏠</span><span>Inicio</span></button>
+  <nav class="tabbar" aria-label="Navegación principal">
+    <button class="tab active" data-tab="inicio" aria-current="page"><span class="tab-icon">🏠</span><span>Inicio</span></button>
     <button class="tab" data-tab="comida"><span class="tab-icon">🍼</span><span>Comida</span></button>
     <button class="tab" data-tab="sueno"><span class="tab-icon">🌙</span><span>Sueño</span></button>
     <button class="tab" data-tab="panal"><span class="tab-icon">💧</span><span>Pañal</span></button>
-    <button class="tab" data-tab="retos"><span class="tab-icon">🏆</span><span>Retos</span></button>
     <button class="tab" data-tab="mas"><span class="tab-icon">✨</span><span>Más</span></button>
   </nav>
 
@@ -69,19 +122,31 @@
 
 <!-- ====== HOJA MODAL ====== -->
 <div id="sheet-backdrop" class="sheet-backdrop hidden"></div>
-<div id="sheet" class="sheet hidden">
-  <div class="sheet-handle"></div>
+<div id="sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1">
+  <div class="sheet-topbar">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <button type="button" id="sheet-close" class="sheet-close" aria-label="Cerrar">×</button>
+  </div>
   <div id="sheet-content"></div>
 </div>
 
-<div id="toast" class="toast hidden"></div>
+<div id="toast" class="toast hidden" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <!-- canvas oculto para gráficas del PDF -->
 <canvas id="pdf-canvas" width="900" height="450" style="display:none"></canvas>
 
+<noscript><p class="noscript">Maya necesita JavaScript para guardar y mostrar el diario.</p></noscript>
+
 <script src="js/vendor/chart.umd.min.js"></script>
 <script src="js/vendor/jspdf.umd.min.js"></script>
 <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
+<script src="js/runtime.js"></script>
+<script src="js/data-schema.js"></script>
+<script src="js/account-vault.js"></script>
+<script src="js/media-store.js"></script>
+<script src="js/demo-data.js"></script>
+<script src="js/insights-engine.js"></script>
+<script src="js/insights-client.js"></script>
 <script src="js/store.js"></script>
 <script src="js/actividades.js"></script>
 <script src="js/info.js"></script>

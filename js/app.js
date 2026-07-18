@@ -3,10 +3,16 @@
 (() => {
   const $ = sel => document.querySelector(sel);
   const main = $('#main');
+  const nombreBebe = () => Store.data.bebe.nombre || 'tu bebé';
 
   let tabActual = 'inicio';
   let vistaMas = null; // subvista dentro de "Más"
   let tickInterval = null;
+  let appIniciada = false;
+  let focoAntesDelSheet = null;
+  let estructuraTimers = '';
+  let insightRemoto = null;
+  let insightSolicitado = '';
 
   /* ---------- formato ---------- */
   const fmtHora = iso => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
@@ -61,15 +67,41 @@
   }
 
   function abrirSheet(html) {
+    focoAntesDelSheet = document.activeElement;
     $('#sheet-content').innerHTML = html;
+    const titulo = $('#sheet-content h2');
+    if (titulo) titulo.id = 'sheet-title';
     $('#sheet').classList.remove('hidden');
     $('#sheet-backdrop').classList.remove('hidden');
+    $('#sheet-backdrop').setAttribute('aria-hidden', 'false');
+    $('#app').inert = true;
+    etiquetarControles($('#sheet'));
+    requestAnimationFrame(() => {
+      const primero = $('#sheet-content input:not([type="hidden"]), #sheet-content select, #sheet-content textarea, #sheet-content button');
+      (primero || $('#sheet-close') || $('#sheet')).focus();
+    });
   }
   function cerrarSheet() {
     $('#sheet').classList.add('hidden');
     $('#sheet-backdrop').classList.add('hidden');
+    $('#sheet-backdrop').setAttribute('aria-hidden', 'true');
+    $('#app').inert = false;
+    if (focoAntesDelSheet && document.contains(focoAntesDelSheet)) focoAntesDelSheet.focus();
+    focoAntesDelSheet = null;
   }
   $('#sheet-backdrop').addEventListener('click', cerrarSheet);
+  $('#sheet-close').addEventListener('click', cerrarSheet);
+  document.addEventListener('keydown', e => {
+    if ($('#sheet').classList.contains('hidden')) return;
+    if (e.key === 'Escape') { e.preventDefault(); cerrarSheet(); return; }
+    if (e.key !== 'Tab') return;
+    const focusables = [...$('#sheet').querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter(el => !el.closest('.hidden'));
+    if (!focusables.length) { e.preventDefault(); $('#sheet').focus(); return; }
+    const first = focusables[0], last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
 
   /* ---------- agrupar registros por día ---------- */
   function porDia(items, campoFecha) {
@@ -133,6 +165,113 @@
     </div>`;
   }
 
+  function bandaEdadInsight() {
+    const dias = edadDias();
+    if (dias === null) return 'unspecified';
+    if (dias < 28) return '0_4w';
+    if (dias < 61) return '1_2m';
+    if (dias < 122) return '2_4m';
+    if (dias < 183) return '4_6m';
+    if (dias < 275) return '6_9m';
+    return '9_12m';
+  }
+
+  function paqueteInsight() {
+    if (!globalThis.MayaInsights) return null;
+    try {
+      const now = Store.isDemo() && Store.demoClock ? Store.demoClock : Date.now();
+      const snapshot = MayaInsights.buildSnapshot(Store.data, {
+        now,
+        locale: 'es-MX',
+        ageBand: Store.isDemo() && Store.data.demo ? Store.data.demo.ageBand : bandaEdadInsight(),
+      });
+      const local = MayaInsights.createDeterministicBrief(snapshot, {
+        offline: Store.isDemo() && Store.demoScenario === 'offline',
+      });
+      const hash = JSON.stringify(snapshot);
+      const brief = insightRemoto && insightRemoto.hash === hash ? insightRemoto.brief : local;
+      return { snapshot, local, brief, hash };
+    } catch (error) {
+      console.error('No se pudo calcular el resumen local', error);
+      return null;
+    }
+  }
+
+  function etiquetaMetrica(id) {
+    return ({
+      feed_count: 'Tomas', feed_minutes: 'Min. de pecho', bottle_ml: 'Ml en biberón',
+      wet_diaper_count: 'Pañales con pipí', stool_diaper_count: 'Pañales con popó', sleep_minutes: 'Sueño registrado',
+    })[id] || 'Registro';
+  }
+
+  function valorMetrica(metric) {
+    if (!metric) return '—';
+    if (metric.unit === 'minutes') return `${Math.round(metric.value)} min`;
+    if (metric.unit === 'ml' || metric.unit === 'milliliters') return `${Math.round(metric.value)} ml`;
+    return String(Math.round(metric.value * 10) / 10);
+  }
+
+  function htmlInsight(paquete) {
+    if (!paquete) return '';
+    const { brief, snapshot } = paquete;
+    const esGpt = brief.generatedBy === 'gpt-5.6-sol' || brief.source === 'gpt-5.6-sol';
+    const metricas = snapshot.metrics.filter(m => ['feed_count', 'wet_diaper_count', 'sleep_minutes'].includes(m.id));
+    return `<section class="card insight-card" id="insight-card" aria-labelledby="insight-title">
+      <div class="insight-head">
+        <div><span class="eyebrow">Últimas 24 h</span><h2 id="insight-title">${esc(brief.headline)}</h2></div>
+        <span class="source-chip ${esGpt ? 'gpt' : 'local'}">${esGpt ? 'GPT‑5.6 Sol' : 'Cálculo local'}</span>
+      </div>
+      <p class="insight-overview">${esc(brief.overview)}</p>
+      <div class="insight-metrics">
+        ${metricas.map(m => `<div><strong>${esc(valorMetrica(m))}</strong><span>${esc(etiquetaMetrica(m.id))}</span></div>`).join('')}
+      </div>
+      ${brief.highlights && brief.highlights.length ? `<ul class="insight-list">${brief.highlights.slice(0, 3).map(h => `<li>${esc(h.copy)}</li>`).join('')}</ul>` : ''}
+      ${brief.suggestions && brief.suggestions[0] ? `<p class="insight-next"><strong>Siguiente paso:</strong> ${esc(brief.suggestions[0].copy)}</p>` : ''}
+      <div class="insight-actions">
+        <button class="btn-ghost" data-accion="insight-detalles">Ver evidencia y privacidad</button>
+      </div>
+      <p class="disclaimer">Describe el registro; no evalúa la salud ni sustituye a su profesional.</p>
+    </section>`;
+  }
+
+  function programarInsight(paquete) {
+    if (!paquete || !Store.isDemo() || insightSolicitado === paquete.hash || !globalThis.MayaInsightsClient) return;
+    const endpoint = document.querySelector('meta[name="maya-ai-endpoint"]')?.content;
+    if (!endpoint) return;
+    insightSolicitado = paquete.hash;
+    const synthetic = !!(Store.data.demo && Store.data.demo.synthetic);
+    MayaInsightsClient.enhance(paquete.snapshot, {
+      demo: true,
+      synthetic,
+      offline: Store.demoScenario === 'offline',
+      endpoint,
+      timeoutMs: 9000,
+    }).then(brief => {
+      insightRemoto = { hash: paquete.hash, brief };
+      if (tabActual === 'inicio') render();
+    }).catch(() => { /* the deterministic card remains visible */ });
+  }
+
+  function hojaInsight() {
+    const paquete = paqueteInsight();
+    if (!paquete) return;
+    const enviado = JSON.stringify(paquete.snapshot, null, 2);
+    abrirSheet(`
+      <h2>Cómo se construyó este resumen</h2>
+      <p class="sheet-lead">Primero, Maya calcula conteos agregados en tu dispositivo y los compara con el historial reciente.</p>
+      <div class="privacy-boundary">
+        <strong>${Store.isDemo() ? 'Demo sintético' : 'Cuenta privada'}</strong>
+        <p>${Store.isDemo()
+          ? 'Solo este resumen agregado y ficticio puede enviarse al endpoint de GPT‑5.6 Sol.'
+          : 'Nada se envía a OpenAI. El resumen de cuentas privadas se calcula enteramente en este dispositivo.'}</p>
+      </div>
+      <details class="payload-details"><summary>Ver datos agregados</summary><pre>${esc(enviado)}</pre></details>
+      <h3>Nunca se incluye</h3>
+      <p>Nombre, fecha de nacimiento, cuidadores, horas exactas, notas, fotos, condiciones, medicamentos, dosis, crecimiento ni identificadores estables.</p>
+      <p class="disclaimer">Este resumen es observacional y no ofrece diagnóstico, urgencia, tratamiento ni consejo médico.</p>
+    `);
+  }
+
   function renderInicio() {
     const d = Store.data;
     const hoy = new Date();
@@ -159,6 +298,7 @@
       return partes.join(' · ');
     };
 
+    const insight = paqueteInsight();
     main.innerHTML = `
       ${bannerFotoSemanal()}
       <div class="quick-actions">
@@ -197,6 +337,8 @@
 
       <div style="margin-top:14px">${bancoCardInicio()}</div>
 
+      ${htmlInsight(insight)}
+
       <div class="card">
         <h2>Última toma</h2>
         <div class="card-row">
@@ -208,6 +350,7 @@
       </div>
       ${condicionesResumen()}
     `;
+    setTimeout(() => programarInsight(insight), 0);
   }
 
   function condicionesResumen() {
@@ -276,7 +419,7 @@
           <span class="entry-time">${fmtHora(t.inicio)}</span>
           ${btnsEntrada('tomas', t.id)}
         </div>
-      `, { emoji: '🍼', texto: 'Aquí aparecerán las tomas de Maya' })}
+      `, { emoji: '🍼', texto: `Aquí aparecerán las tomas de ${esc(nombreBebe())}` })}
     `;
 
     $('#seg-comida').addEventListener('click', e => {
@@ -301,7 +444,7 @@
     const ml0 = existente ? (existente.ml || 60) : 60;
     abrirSheet(`
       <h2>${existente ? 'Editar toma' : tipo === 'donante' ? 'Toma de leche extraída 🥛' : tipo === 'formula' ? 'Fórmula 🍼' : 'Toma de pecho 🤱'}</h2>
-      ${!existente && tipo === 'donante' ? `<p style="font-size:13px;color:var(--text-2);margin:-6px 0 12px">Esto registra lo que Maya <b>se tomó</b> en biberón (se resta del banco de leche). Para agregar leche que extrajiste, usa el <b>Banco de leche 🥛</b>.</p>` : ''}
+      ${!existente && tipo === 'donante' ? `<p style="font-size:13px;color:var(--text-2);margin:-6px 0 12px">Esto registra lo que ${esc(nombreBebe())} <b>tomó</b> en biberón (se resta del banco de leche). Para agregar leche extraída, usa el <b>Banco de leche 🥛</b>.</p>` : ''}
       ${tipo === 'materno' ? `
         <div class="form-group"><label>Lado</label>
           <select id="f-lado">
@@ -427,7 +570,7 @@
   }
 
   const chipsQuien = (sel) => ['mama', 'papa', 'ambos'].map(q =>
-    `<button type="button" class="${sel === q ? 'activo' : ''}" data-quien="${q}">${q === 'ambos' ? '👫 Ambos' : (q === 'mama' ? '👩 ' : '👨 ') + nombreQuien(q)}</button>`).join('');
+    `<button type="button" class="${sel === q ? 'activo' : ''}" data-quien="${q}">${q === 'ambos' ? '👫 Ambos' : (q === 'mama' ? '👩 ' : '👨 ') + esc(nombreQuien(q))}</button>`).join('');
 
   function renderSueno() {
     const timers = Store.getTimers();
@@ -474,7 +617,7 @@
           </div>
           ${btnsEntrada('suenos', s.id)}
         </div>`;
-      }, { emoji: '🌙', texto: 'Aquí aparecerán los sueños y vigilias de Maya' })}
+      }, { emoji: '🌙', texto: `Aquí aparecerán los sueños y vigilias de ${esc(nombreBebe())}` })}
     `;
 
     if (timers.vigilia) {
@@ -671,12 +814,12 @@
   const colorPopo = id => COLORES_POPO.find(c => c.id === id);
 
   const LECTURA_COLOR = {
-    mostaza: 'Color mostaza: el clásico de bebés que toman leche materna. Normal y saludable. ✅',
-    cafe: 'Café: normal, muy común cuando toman fórmula. ✅',
-    verde: 'Verde: suele ser normal (frecuente con fórmula o tránsito rápido). Si es constante o viene con moco, coméntenlo en la próxima consulta.',
-    negro: 'Negro: normal los primeros días (meconio). Si aparece después de la primera semana, coméntenlo al pediatra.',
-    rojo: 'Tonos rojizos pueden indicar sangre: vale la pena avisar al pediatra pronto. ⚠️',
-    gris: 'Blanco o gris es poco común y amerita avisar al pediatra. ⚠️',
+    mostaza: 'Color registrado: mostaza.',
+    cafe: 'Color registrado: café.',
+    verde: 'Color registrado: verde.',
+    negro: 'Color registrado: negro.',
+    rojo: 'Color registrado: rojizo.',
+    gris: 'Color registrado: blanco o gris.',
   };
 
   const CONSISTENCIAS = [
@@ -689,11 +832,11 @@
   const consistenciaPopo = id => CONSISTENCIAS.find(c => c.id === id);
 
   const LECTURA_CONSISTENCIA = {
-    liquida: 'Aguada: una que otra es normal; si son varias seguidas y muy líquidas puede ser diarrea — vigilen que siga comiendo bien y mojando pañales.',
-    cremosa: 'Cremosa: la consistencia típica y saludable.',
-    grumitos: 'Con grumitos o "semillitas": el clásico de la lactancia materna, totalmente normal.',
-    pastosa: 'Pastosa: normal, común cuando toman fórmula.',
-    dura: 'Bolitas duras y secas sugieren estreñimiento; si se repite, coméntenlo al pediatra.',
+    liquida: 'Consistencia registrada: aguada.',
+    cremosa: 'Consistencia registrada: cremosa.',
+    grumitos: 'Consistencia registrada: con grumitos o “semillitas”.',
+    pastosa: 'Consistencia registrada: pastosa.',
+    dura: 'Consistencia registrada: bolitas duras o secas.',
   };
 
   function lecturaCombinada(colorId, consId) {
@@ -775,7 +918,7 @@
 
   function avisoColor(colorId) {
     if (colorId === 'rojo' || colorId === 'gris') {
-      setTimeout(() => toast('💡 Ese color vale la pena comentarlo al pediatra'), 1300);
+      setTimeout(() => toast('💡 Puedes conservar este registro para revisarlo con su profesional'), 1300);
     }
   }
 
@@ -854,7 +997,7 @@
         <button class="btn-ghost" style="flex:1" id="pp-camara">📷 Tomar foto</button>
         <button class="btn-ghost" style="flex:1" id="pp-carrete">🖼️ Del carrete</button>
       </div>
-      <p class="disclaimer">La lectura es orientativa. Si agregan foto, se analiza aquí en el teléfono y se guarda en su repositorio privado.</p>
+      <p class="disclaimer">La lectura solo describe color y textura. Si agregan una foto, se procesa en el teléfono y se guarda cifrada en este dispositivo.</p>
     `);
 
     const pintar = () => {
@@ -963,7 +1106,7 @@
       <div class="info-box" id="an-lectura"></div>
       <button class="btn-primary btn-block" id="an-guardar" style="margin-top:12px">Guardar</button>
       <button class="btn-ghost btn-block" id="an-borrar" style="color:var(--danger)">🗑️ Borrar la foto de este registro</button>
-      <p class="disclaimer">Análisis aproximado hecho en el teléfono; no sustituye la valoración del pediatra.</p>
+      <p class="disclaimer">Descripción aproximada de color y textura hecha en el teléfono; no evalúa la salud ni sustituye a su profesional.</p>
     `);
 
     const pintar = () => {
@@ -1114,8 +1257,8 @@
     div.className = 'celebracion';
     div.innerHTML = `<div class="cele-card">
       <span class="cele-emoji">${emoji}</span>
-      <div class="cele-texto">${texto}</div>
-      ${sub ? `<div class="cele-sub">${sub}</div>` : ''}
+      <div class="cele-texto">${esc(texto)}</div>
+      ${sub ? `<div class="cele-sub">${esc(sub)}</div>` : ''}
     </div>`;
     document.body.appendChild(div);
     setTimeout(() => div.remove(), 3300);
@@ -1127,14 +1270,16 @@
     return Actividades.tareasDeHoy(dias, Store.data.condiciones, fechaLocal());
   }
 
-  function renderRetos() {
+  function renderRetos(desdeMas = false) {
     const info = tareasHoy();
     if (!info) {
       main.innerHTML = `
+        ${desdeMas ? volverMas : ''}
         <h2 class="section-title">Retos del día 🏆</h2>
         <div class="empty-state"><span class="big">🎂</span>
-          Para sugerirle actividades a su medida, pon la fecha de nacimiento de Maya en
+          Para organizar ideas de juego por edad, agrega la fecha de nacimiento en
           <b>Más → Ajustes</b>.</div>`;
+      if (desdeMas) bindVolver();
       return;
     }
     const hoy = fechaLocal();
@@ -1152,7 +1297,9 @@
     const timers = Store.getTimers();
 
     main.innerHTML = `
+      ${desdeMas ? volverMas : ''}
       <h2 class="section-title">Retos del día 🏆</h2>
+      <div class="activity-safety">${esc(info.aviso || 'Ideas generales de juego, siempre con supervisión de un adulto.')}</div>
       <div class="retos-hero">
         <div class="anillo">
           <svg width="86" height="86">
@@ -1207,9 +1354,10 @@
             <span class="m-nombre">${esc(m.nombre)}</span>
           </div>`).join('')}
       </div>
-      <p class="disclaimer">Actividades sugeridas según su edad (guías de estimulación temprana AAP/CDC). Siempre con supervisión; cada bebé lleva su propio ritmo. 💗</p>
+      <p class="disclaimer">Son ideas generales, no indicaciones médicas ni una evaluación del desarrollo. Cada bebé lleva su propio ritmo. 💗</p>
     `;
 
+    if (desdeMas) bindVolver();
     main.querySelectorAll('[data-tarea]').forEach(b => b.onclick = () => alternarTarea(b.dataset.tarea));
     main.querySelectorAll('[data-timer-tarea]').forEach(b => b.onclick = () => iniciarActividad(b.dataset.timerTarea));
   }
@@ -1234,7 +1382,7 @@
       const todas = info.tareas.every(x => Store.data.actividades.some(a => a.fecha === hoy && a.tarea === x.key && a.hecha));
       if (todas) {
         confeti(120);
-        celebracion('🌟', '¡Día perfecto!', `Completaron todos los retos de hoy con ${Store.data.bebe.nombre || 'Maya'}`);
+        celebracion('🌟', '¡Día perfecto!', `Completaron todas las ideas de hoy con ${nombreBebe()}`);
       }
     }, 350);
   }
@@ -1405,7 +1553,7 @@
     },
     postoma: {
       nombre: 'Después de amamantar', emoji: '➕',
-      desc: '10 min justo después de la toma: manda la señal de "se necesita más" sin quitarle leche a Maya.',
+      desc: 'Sesión breve registrada justo después de una toma.',
       fases: [{ nombre: 'Extraer', min: 10 }],
     },
   };
@@ -1559,7 +1707,7 @@
     { emoji: '🎚️', texto: 'En tu Medela usa el vacío más alto que NO duela: sube niveles hasta que incomode y bájale uno. Dolor = menos leche, no más.' },
     { emoji: '🤲', texto: 'Aprovecha que tu bomba es manos libres: compresiones suaves en el pecho mientras extraes sacan notablemente más (método "manos activas" del timer).' },
     { emoji: '💆', texto: 'Masaje suave y compresas tibias 2 minutos antes: el reflejo de bajada llega antes y sale más leche.' },
-    { emoji: '👶', texto: 'Ver, oler o tener cerca a Maya (o su foto en la app 😉) mientras extraes libera oxitocina y mejora la bajada.' },
+    { emoji: '👶', texto: `Tener cerca a ${nombreBebe()} —o una foto— puede hacer la sesión más cómoda.` },
     { emoji: '💧', texto: 'Hidratación y comidas completas: la leche es ~90% agua. Ten un vaso al lado en cada sesión.' },
     { emoji: '🍼', texto: 'El método "Después de amamantar" del timer (10 min tras la toma) manda la señal de "se necesita más" sin robarle leche a la bebé.' },
     { emoji: '🧘', texto: 'El estrés bloquea la oxitocina: hombros sueltos, respira profundo y no te quedes viendo el bote.' },
@@ -1779,6 +1927,7 @@
      MÁS (menú y subvistas)
   ============================================================ */
   function renderMas() {
+    if (vistaMas === 'retos') return renderRetos(true);
     if (vistaMas === 'banco') return renderBanco();
     if (vistaMas === 'salud') return renderSalud();
     if (vistaMas === 'intervenciones') return renderIntervenciones();
@@ -1798,23 +1947,28 @@
     main.innerHTML = `
       <h2 class="section-title">Más</h2>
       <div class="menu-list">
+        ${item('retos', '🏆', 'bg-yellow', 'Ideas y logros', 'Juego por edad, racha y fotos semanales')}
         ${item('banco', '🥛', 'bg-blue', 'Banco de leche', (() => { const s = saldosBanco(); return `${s.refri} ml listos · ${s.cong} ml congelados`; })())}
-        ${item('salud', '🩺', 'bg-pink', 'Condiciones médicas', d.condiciones.length ? d.condiciones.map(c => c.nombre).join(', ') : 'Ictericia, seguimiento de labs…')}
+        ${item('salud', '🩺', 'bg-pink', 'Condiciones médicas', d.condiciones.length ? d.condiciones.map(c => esc(c.nombre)).join(', ') : 'Mediciones e indicaciones profesionales')}
         ${item('intervenciones', '💉', 'bg-peach', 'Intervenciones', d.intervenciones.length ? `${d.intervenciones.length} registradas` : 'Toma de sangre, vacunas, estudios…')}
         ${item('medicamentos', '💊', 'bg-mint', 'Medicamentos', d.medicamentos.filter(m => m.activo).length ? `${d.medicamentos.filter(m => m.activo).length} activos` : 'Tratamientos y vitaminas')}
         ${item('crecimiento', '📏', 'bg-blue', 'Crecimiento', d.crecimiento.length ? 'Peso, talla y perímetro' : 'Registra peso y talla')}
         ${item('fotos', '📸', 'bg-lav', 'Fotos', d.fotos.length ? `${d.fotos.length} recuerdos` : 'Momentos especiales')}
         ${item('resumen', '📄', 'bg-yellow', 'Resumen PDF', 'Descarga un reporte con gráficas')}
-        ${item('ajustes', '⚙️', 'bg-pink', 'Ajustes', 'Sincronización, respaldo y sesión')}
+        ${item('ajustes', '⚙️', 'bg-pink', 'Ajustes', 'Privacidad, respaldo, apariencia y sesión')}
       </div>
     `;
-    main.querySelectorAll('[data-vista]').forEach(b => b.onclick = () => { vistaMas = b.dataset.vista; render(); });
+    main.querySelectorAll('[data-vista]').forEach(b => b.onclick = () => {
+      vistaMas = b.dataset.vista;
+      guardarRuta();
+      render();
+    });
   }
 
   const volverMas = `<div class="back-row"><button data-volver="1">‹ Más</button></div>`;
   function bindVolver() {
     const b = main.querySelector('[data-volver]');
-    if (b) b.onclick = () => { vistaMas = null; render(); };
+    if (b) b.onclick = () => { vistaMas = null; guardarRuta(); render(); };
   }
 
   /* ---------- Condiciones médicas ---------- */
@@ -1825,7 +1979,7 @@
       <h2 class="section-title">Condiciones médicas 🩺</h2>
       <button class="btn-primary btn-block" id="btn-nueva-cond">＋ Agregar condición</button>
       <div id="conds" style="margin-top:14px">
-        ${conds.length ? '' : '<div class="empty-state"><span class="big">🩺</span>Registra una condición (por ejemplo, ictericia) y la app buscará información y cuidados sugeridos.</div>'}
+        ${conds.length ? '' : '<div class="empty-state"><span class="big">🩺</span>Registra una condición y organiza las mediciones e indicaciones recibidas de su profesional.</div>'}
       </div>
     `;
     bindVolver();
@@ -2044,7 +2198,7 @@
               <div class="entry-sub">${[m.dosis, m.frecuencia, m.notas].filter(Boolean).map(esc).join(' · ') || '—'}</div>
             </div>
             ${btnsEntrada('medicamentos', m.id)}
-          </div>`).join('') || '<div class="empty-state"><span class="big">💊</span>Vitaminas, tratamientos y medicamentos de Maya</div>'}
+          </div>`).join('') || `<div class="empty-state"><span class="big">💊</span>Indicaciones profesionales registradas para ${esc(nombreBebe())}</div>`}
       </div>
     `;
     bindVolver();
@@ -2173,7 +2327,7 @@
         <button class="btn-secondary" style="flex:1" id="btn-galeria">🖼️ Subir foto</button>
       </div>
       <div class="photo-grid" style="margin-top:14px" id="grid-fotos">
-        ${fotos.map(f => `<img data-foto="${f.id}" alt="${esc(f.titulo || 'Foto de Maya')}" loading="lazy">`).join('') ||
+        ${fotos.map(f => `<img data-foto="${f.id}" alt="${esc(f.titulo || `Foto de ${nombreBebe()}`)}" loading="lazy">`).join('') ||
           '<div class="empty-state" style="grid-column:1/-1"><span class="big">📸</span>Guarda fotos de momentos especiales o de cosas que quieras enseñarle al pediatra</div>'}
       </div>
     `;
@@ -2259,11 +2413,13 @@
     $('#fs-carrete').onclick = () => lanzar(false);
   }
 
-  function verFoto(f) {
+  async function verFoto(f) {
+    const src = f.dataUrl || await Store.fetchPhoto(f);
+    if (!src) { toast('No se pudo abrir la foto cifrada'); return; }
     const div = document.createElement('div');
     div.className = 'photo-viewer';
     div.innerHTML = `
-      <img src="${f.dataUrl || ''}">
+      <img src="${src}" alt="${esc(f.titulo || `Foto de ${nombreBebe()}`)}">
       <div class="pv-caption">${esc(f.titulo || '')}<br><small>${new Date(f.fecha).toLocaleString('es-MX')}</small></div>
       <div class="pv-actions">
         <button class="btn-danger" id="pv-del">Borrar</button>
@@ -2345,96 +2501,111 @@
   }
 
   /* ---------- Ajustes ---------- */
+  function aplicarTema(valor) {
+    const theme = ['light', 'dark'].includes(valor) ? valor
+      : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.dataset.theme = theme;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = theme === 'dark' ? '#171217' : '#fff8fa';
+  }
+
   function renderAjustes() {
-    const cfg = Store.config;
     const d = Store.data;
+    const cuenta = Store.currentAccount();
+    const demo = Store.isDemo();
+    const prefs = Store.preferences || {};
+    const guardado = Store.lastSaved ? new Date(Store.lastSaved).toLocaleString('es-MX') : 'pendiente';
     main.innerHTML = `
       ${volverMas}
       <h2 class="section-title">Ajustes ⚙️</h2>
 
       <div class="card">
         <h2>👶 Bebé</h2>
-        <div class="form-group"><label>Nombre</label>
-          <input type="text" id="a-nombre" value="${esc(d.bebe.nombre)}">
+        <div class="form-group"><label for="a-nombre">Nombre</label>
+          <input type="text" id="a-nombre" value="${esc(d.bebe.nombre)}" maxlength="80">
         </div>
         <div class="form-row">
-          <div class="form-group"><label>Fecha de nacimiento</label>
+          <div class="form-group"><label for="a-nac">Fecha de nacimiento</label>
             <input type="date" id="a-nac" value="${d.bebe.nacimiento || ''}">
           </div>
-          <div class="form-group"><label>Hora</label>
+          <div class="form-group"><label for="a-hora-nac">Hora <span class="optional">opcional</span></label>
             <input type="time" id="a-hora-nac" value="${d.bebe.hora || ''}">
           </div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label>Mamá</label>
-            <input type="text" id="a-mama" value="${esc(d.bebe.mama || '')}" placeholder="Rubi">
+          <div class="form-group"><label for="a-mama">Cuidador 1</label>
+            <input type="text" id="a-mama" value="${esc(d.bebe.mama || '')}" maxlength="80" placeholder="Nombre">
           </div>
-          <div class="form-group"><label>Papá</label>
-            <input type="text" id="a-papa" value="${esc(d.bebe.papa || '')}" placeholder="Paul">
+          <div class="form-group"><label for="a-papa">Cuidador 2</label>
+            <input type="text" id="a-papa" value="${esc(d.bebe.papa || '')}" maxlength="80" placeholder="Nombre">
           </div>
         </div>
-        <div class="form-group"><label>Este teléfono lo usa</label>
+        <div class="form-group"><label for="a-dispositivo">Este dispositivo lo usa</label>
           <select id="a-dispositivo">
             <option value="" ${!Store.getDispositivo() ? 'selected' : ''}>Sin definir</option>
-            <option value="mama" ${Store.getDispositivo() === 'mama' ? 'selected' : ''}>👩 ${esc(d.bebe.mama || 'Mamá')}</option>
-            <option value="papa" ${Store.getDispositivo() === 'papa' ? 'selected' : ''}>👨 ${esc(d.bebe.papa || 'Papá')}</option>
+            <option value="mama" ${Store.getDispositivo() === 'mama' ? 'selected' : ''}>${esc(d.bebe.mama || 'Cuidador 1')}</option>
+            <option value="papa" ${Store.getDispositivo() === 'papa' ? 'selected' : ''}>${esc(d.bebe.papa || 'Cuidador 2')}</option>
           </select>
         </div>
-        <button class="btn-secondary btn-block" id="a-guardar-bebe">Guardar</button>
+        <button class="btn-secondary btn-block" id="a-guardar-bebe">Guardar perfil</button>
+      </div>
+
+      <div class="card privacy-card">
+        <div class="card-row"><h2>🔐 Privacidad y acceso</h2><span class="status-pill ${demo ? 'demo' : 'secure'}">${demo ? 'Demo' : 'Cifrado'}</span></div>
+        ${demo ? `
+          <p>Esta sesión contiene únicamente datos ficticios y está separada de todas las cuentas.</p>
+          <button class="btn-secondary btn-block" id="a-reset-demo">Restablecer escenario</button>
+        ` : `
+          <dl class="privacy-facts">
+            <div><dt>Cuenta</dt><dd>${esc(cuenta ? cuenta.displayName : '')} <span>@${esc(cuenta ? cuenta.username : '')}</span></dd></div>
+            <div><dt>Guardado</dt><dd>En este dispositivo · ${esc(guardado)}</dd></div>
+            <div><dt>Protección</dt><dd>AES‑GCM; la llave existe solo mientras la sesión está abierta</dd></div>
+          </dl>
+          <p class="small-note">La versión de Sites añadirá acceso seguro entre cuidadores. Esta PWA estática no guarda tokens ni contraseñas de servicios externos.</p>
+        `}
+        <p id="storage-estimate" class="small-note">Calculando espacio disponible…</p>
       </div>
 
       <div class="card">
-        <h2>☁️ Sincronización con GitHub</h2>
-        <p style="font-size:13px;color:var(--text-2);margin-bottom:12px">
-          Para que los dos celulares vean los mismos datos, la app los guarda en un
-          repositorio de GitHub. <b>Usa un repositorio PRIVADO</b> para que los datos
-          de la bebé no sean públicos.
-        </p>
-        <div class="form-row">
-          <div class="form-group"><label>Usuario u organización</label>
-            <input type="text" id="a-owner" value="${esc(cfg.owner)}" placeholder="PaulHRios" autocapitalize="none">
-          </div>
-          <div class="form-group"><label>Repositorio</label>
-            <input type="text" id="a-repo" value="${esc(cfg.repo)}" placeholder="maya_datos" autocapitalize="none">
-          </div>
-        </div>
-        <div class="form-group"><label>Token de acceso (fine-grained, con permiso Contents)</label>
-          <input type="password" id="a-token" value="${esc(cfg.token)}" placeholder="github_pat_…" autocapitalize="none">
-        </div>
-        <label class="checkbox-row"><input type="checkbox" id="a-autosync" ${cfg.autoSync ? 'checked' : ''}> Sincronizar automáticamente</label>
-        <div class="form-row" style="margin-top:8px">
-          <button class="btn-secondary" style="flex:1" id="a-probar">Probar conexión</button>
-          <button class="btn-primary" style="flex:1" id="a-sync">Sincronizar ahora</button>
-        </div>
-        <p style="font-size:12px;color:var(--text-2);margin-top:10px">
-          ${cfg.lastSync ? `Última sincronización: ${new Date(cfg.lastSync).toLocaleString('es-MX')}` : 'Aún no se ha sincronizado.'}
-        </p>
-        <details style="margin-top:8px;font-size:13px;color:var(--text-2)">
-          <summary style="font-weight:700;cursor:pointer">¿Cómo configurarlo? (una sola vez)</summary>
-          <ol style="padding-left:18px;margin-top:8px;line-height:1.6">
-            <li>En GitHub crea un repositorio <b>privado</b> nuevo, por ejemplo <b>maya-datos</b>.</li>
-            <li>Ve a Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token.</li>
-            <li>Dale acceso <b>solo a ese repositorio</b>, con permiso <b>Contents: Read and write</b>.</li>
-            <li>Copia el token y pégalo aquí en los dos celulares.</li>
-          </ol>
-        </details>
+        <h2>✨ Resumen inteligente</h2>
+        <p>En cuentas privadas, los patrones se calculan localmente. GPT‑5.6 Sol se usa solo en el demo sintético: nunca recibe datos reales de un bebé.</p>
+        <button class="btn-secondary btn-block" id="a-ver-privacidad">Ver el límite de privacidad</button>
       </div>
 
       <div class="card">
-        <h2>💾 Respaldo</h2>
+        <h2>🌙 Apariencia</h2>
+        <div class="form-group"><label for="a-theme">Tema</label>
+          <select id="a-theme">
+            <option value="system" ${prefs.theme === 'system' ? 'selected' : ''}>Usar el del dispositivo</option>
+            <option value="light" ${prefs.theme === 'light' ? 'selected' : ''}>Claro</option>
+            <option value="dark" ${prefs.theme === 'dark' ? 'selected' : ''}>Noche</option>
+          </select>
+        </div>
+        <div class="install-guide">
+          <strong>Instalar en iPhone</strong>
+          <span>En Safari toca Compartir y después “Agregar a pantalla de inicio”.</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>💾 Respaldo portátil</h2>
+        <p class="small-note">El archivo puede contener información sensible y no incluye los archivos de fotos cifradas. Guárdalo en un lugar privado.</p>
         <div class="form-row">
           <button class="btn-secondary" style="flex:1" id="a-exportar">Exportar JSON</button>
-          <button class="btn-secondary" style="flex:1" id="a-importar">Importar JSON</button>
+          <button class="btn-secondary" style="flex:1" id="a-importar" ${demo ? 'disabled' : ''}>Importar JSON</button>
         </div>
-        <input type="file" id="a-archivo" accept=".json" style="display:none">
+        <input type="file" id="a-archivo" accept="application/json,.json" style="display:none">
       </div>
 
-      <button class="btn-danger btn-block" id="a-logout">Cerrar sesión</button>
+      <button class="btn-danger btn-block" id="a-logout">${demo ? 'Salir del demo' : 'Cerrar y bloquear sesión'}</button>
+      ${demo ? '' : '<button class="btn-ghost btn-block danger-link" id="a-delete-account">Eliminar cuenta de este dispositivo</button>'}
     `;
     bindVolver();
 
     $('#a-guardar-bebe').onclick = () => {
-      d.bebe.nombre = $('#a-nombre').value.trim() || 'Maya';
+      const nombre = $('#a-nombre').value.trim();
+      if (!nombre) { toast('Escribe el nombre del bebé'); $('#a-nombre').focus(); return; }
+      d.bebe.nombre = nombre;
       d.bebe.nacimiento = $('#a-nac').value;
       d.bebe.hora = $('#a-hora-nac').value;
       d.bebe.mama = $('#a-mama').value.trim();
@@ -2442,60 +2613,80 @@
       d.bebe.actualizado = new Date().toISOString();
       Store.setDispositivo($('#a-dispositivo').value);
       Store.saveLocal();
-      toast('Guardado 💗');
+      toast('Perfil guardado');
       actualizarHeader();
     };
 
-    const leerCfg = () => {
-      Store.config.owner = $('#a-owner').value.trim();
-      Store.config.repo = $('#a-repo').value.trim();
-      Store.config.token = $('#a-token').value.trim();
-      Store.config.autoSync = $('#a-autosync').checked;
-      Store.saveConfig();
-    };
-    $('#a-probar').onclick = async () => {
-      leerCfg();
-      if (!Store.canSync()) { toast('Llena usuario, repo y token'); return; }
-      toast(await Store.testConnection() ? 'Conexión exitosa ✅' : 'No se pudo conectar ❌');
-    };
-    $('#a-sync').onclick = async () => {
-      leerCfg();
-      if (!Store.canSync()) { toast('Llena usuario, repo y token'); return; }
-      toast('Sincronizando…');
-      await Store.syncNow();
-      toast(Store.syncState === 'ok' ? 'Sincronizado ✅' : 'Error al sincronizar ❌');
+    if ($('#a-reset-demo')) $('#a-reset-demo').onclick = async () => {
+      await Store.resetDemo();
+      insightRemoto = null;
+      insightSolicitado = '';
+      toast('Demo restablecido');
       render();
+    };
+    $('#a-ver-privacidad').onclick = hojaInsight;
+    $('#a-theme').onchange = () => {
+      const theme = $('#a-theme').value;
+      Store.preferences = { theme };
+      aplicarTema(theme);
     };
 
     $('#a-exportar').onclick = () => {
       const blob = new Blob([JSON.stringify(Store.data, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `respaldo-maya-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      const slug = (d.bebe.nombre || 'bebe').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
+      link.download = `respaldo-${slug}-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      toast('Respaldo exportado; protégelo como información privada');
     };
     $('#a-importar').onclick = () => $('#a-archivo').click();
-    $('#a-archivo').onchange = e => {
-      const file = e.target.files[0];
+    $('#a-archivo').onchange = event => {
+      const file = event.target.files[0];
       if (!file) return;
-      const fr = new FileReader();
-      fr.onload = () => {
+      if (file.size > 2 * 1024 * 1024) { toast('Ese respaldo es demasiado grande para esta versión'); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
         try {
-          const imp = JSON.parse(fr.result);
-          if (!imp.tomas) throw new Error('formato');
-          Store.data = Object.assign(Store.emptyData(), imp);
+          const imported = Store.importData(JSON.parse(reader.result));
+          if (!confirm(`¿Reemplazar este diario por el respaldo de ${imported.bebe.nombre || 'este bebé'}?`)) return;
+          Store.data = imported;
           Store.saveLocal();
-          toast('Respaldo importado ✅');
+          toast('Respaldo validado e importado');
           render();
-        } catch { toast('Archivo no válido'); }
+        } catch { toast('El archivo no tiene un formato válido'); }
       };
-      fr.readAsText(file);
+      reader.readAsText(file);
     };
 
-    $('#a-logout').onclick = () => {
+    $('#a-logout').onclick = async () => {
+      await Store.flush();
       Store.logout();
+      const clean = `${location.pathname}`;
+      history.replaceState(null, '', clean);
       location.reload();
     };
+
+    if ($('#a-delete-account')) $('#a-delete-account').onclick = async () => {
+      const username = cuenta && cuenta.username;
+      const typed = prompt(`Esta acción borra el diario y las fotos locales. Escribe ${username} para confirmar:`);
+      if (typed !== username) { if (typed !== null) toast('La confirmación no coincide'); return; }
+      try {
+        await Store.deleteCurrentAccount();
+        history.replaceState(null, '', location.pathname);
+        location.reload();
+      } catch {
+        toast('No se pudo eliminar toda la cuenta; inténtalo de nuevo');
+      }
+    };
+
+    Store.storageEstimate().then(({ usage, quota }) => {
+      const target = $('#storage-estimate');
+      if (!target) return;
+      if (!Number.isFinite(usage) || !Number.isFinite(quota)) target.textContent = 'El navegador no informa el espacio disponible.';
+      else target.textContent = `Uso del origen: ${(usage / 1048576).toFixed(1)} MB de ${(quota / 1048576).toFixed(0)} MB disponibles.`;
+    }).catch(() => {});
   }
 
   /* ============================================================
@@ -2574,7 +2765,26 @@
           </div>
         </div>`;
     }
-    cont.innerHTML = html;
+    document.body.classList.toggle('has-active-timers', !!html);
+    const estructura = html
+      .replace(/(<span class="timer-clock">)[\s\S]*?(<\/span>)/g, '$1#CLOCK#$2')
+      .replace(/(<span class="fase-chip">)[\s\S]*?(<\/span>)/g, '$1#PHASE#$2');
+    if (estructura === estructuraTimers && cont.children.length) {
+      const template = document.createElement('template');
+      template.innerHTML = html;
+      const nextClocks = template.content.querySelectorAll('.timer-clock');
+      cont.querySelectorAll('.timer-clock').forEach((clock, index) => {
+        if (nextClocks[index]) clock.textContent = nextClocks[index].textContent;
+      });
+      const nextPhases = template.content.querySelectorAll('.fase-chip');
+      cont.querySelectorAll('.fase-chip').forEach((phase, index) => {
+        if (nextPhases[index]) phase.textContent = nextPhases[index].textContent;
+      });
+    } else {
+      cont.innerHTML = html;
+      estructuraTimers = estructura;
+      etiquetarControles(cont);
+    }
     actualizarWakeLock();
   }
 
@@ -2583,7 +2793,7 @@
   let wakeLock = null;
   async function actualizarWakeLock() {
     const t = Store.getTimers();
-    const necesita = !!t.toma && !t.toma.pausadoDesde;
+    const necesita = (!!t.toma && !t.toma.pausadoDesde) || !!t.extraccion || !!t.actividad;
     try {
       if (necesita && !wakeLock && 'wakeLock' in navigator && document.visibilityState === 'visible') {
         wakeLock = await navigator.wakeLock.request('screen');
@@ -2599,6 +2809,52 @@
   /* ============================================================
      acciones globales y navegación
   ============================================================ */
+  function etiquetarControles(root = document) {
+    const labels = {
+      'toma-cancelar': 'Cancelar toma', 'toma-pausa': 'Pausar o reanudar toma', 'toma-terminar': 'Terminar y guardar toma',
+      'sueno-cancelar': 'Cancelar sueño', 'sueno-terminar': 'Terminar y guardar sueño',
+      'vigilia-cancelar': 'Cancelar vigilia', 'vigilia-nota': 'Agregar nota de vigilia', 'vigilia-terminar': 'Terminar vigilia',
+      'ext-cancelar': 'Cancelar extracción', 'ext-terminar': 'Terminar extracción',
+      'act-cancelar': 'Cancelar actividad', 'act-terminar': 'Marcar actividad terminada',
+      'foto-semanal': 'Tomar foto semanal', 'insight-detalles': 'Ver evidencia y privacidad del resumen',
+    };
+    root.querySelectorAll('[data-accion]').forEach(button => {
+      if (!button.getAttribute('aria-label') && labels[button.dataset.accion]) button.setAttribute('aria-label', labels[button.dataset.accion]);
+    });
+    root.querySelectorAll('.form-group > label:not([for])').forEach(label => {
+      const field = label.parentElement.querySelector('input, select, textarea');
+      if (!field) return;
+      if (!field.id) field.id = `campo-${Math.random().toString(36).slice(2, 9)}`;
+      label.htmlFor = field.id;
+    });
+    root.querySelectorAll('.segmented button').forEach(button => button.setAttribute('aria-pressed', button.classList.contains('active') ? 'true' : 'false'));
+    root.querySelectorAll('canvas.chart').forEach(canvas => {
+      canvas.setAttribute('role', 'img');
+      if (!canvas.getAttribute('aria-label')) canvas.setAttribute('aria-label', 'Gráfica de registros; los valores también aparecen en la lista cercana.');
+    });
+  }
+
+  function guardarRuta(reemplazar = false) {
+    const hash = `#${tabActual}${tabActual === 'mas' && vistaMas ? `/${vistaMas}` : ''}`;
+    const state = { maya: true, tab: tabActual, vista: vistaMas };
+    if (reemplazar) history.replaceState(state, '', `${location.pathname}${location.search}${hash}`);
+    else if (location.hash !== hash) history.pushState(state, '', hash);
+  }
+
+  function aplicarRuta() {
+    const match = location.hash.match(/^#(inicio|comida|sueno|panal|mas)(?:\/([a-z-]+))?$/);
+    if (!match) return;
+    tabActual = match[1];
+    vistaMas = tabActual === 'mas' ? (match[2] || null) : null;
+  }
+
+  window.addEventListener('popstate', () => {
+    if (!Store.hasSession()) return;
+    aplicarRuta();
+    render();
+    window.scrollTo(0, 0);
+  });
+
   document.body.addEventListener('click', e => {
     const btn = e.target.closest('[data-accion]');
     if (btn) {
@@ -2626,7 +2882,7 @@
       if (a === 'ver-banco') {
         tabActual = 'mas';
         vistaMas = 'banco';
-        document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'mas'));
+        guardarRuta();
         render();
         window.scrollTo(0, 0);
       }
@@ -2635,6 +2891,7 @@
       if (a === 'act-terminar') terminarActividad(true);
       if (a === 'act-cancelar') { if (confirm('¿Cancelar la actividad sin marcarla?')) terminarActividad(false); }
       if (a === 'foto-semanal') pedirFotoSemanal(Number(btn.dataset.sem));
+      if (a === 'insight-detalles') hojaInsight();
       return;
     }
 
@@ -2674,7 +2931,7 @@
     tab.addEventListener('click', () => {
       tabActual = tab.dataset.tab;
       if (tabActual !== 'mas') vistaMas = null;
-      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
+      guardarRuta();
       render();
       window.scrollTo(0, 0);
     });
@@ -2683,13 +2940,13 @@
   $('#btn-settings').onclick = () => {
     tabActual = 'mas';
     vistaMas = 'ajustes';
-    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'mas'));
+    guardarRuta();
     render();
   };
 
   function actualizarHeader() {
     const d = Store.data;
-    $('#header-title').textContent = d.bebe.nombre || 'Maya';
+    $('#header-title').textContent = d.bebe.nombre || 'Bebé';
     let sub = fmtFechaLarga(new Date());
     if (d.bebe.nacimiento) {
       const dias = Math.floor((Date.now() - new Date(`${d.bebe.nacimiento}T${d.bebe.hora || '00:00'}`)) / 86400000);
@@ -2698,16 +2955,49 @@
     $('#header-sub').textContent = sub;
   }
 
+  function renderDemoBanner() {
+    const bar = $('#demo-banner');
+    if (!Store.isDemo()) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+    const labels = { steady: 'Ritmo estable', shift: 'Cambios', sparse: 'Pocos datos', offline: 'Sin conexión' };
+    bar.innerHTML = `
+      <div><strong>Demo · datos ficticios</strong><span>Ningún registro pertenece a una persona real.</span></div>
+      <label>Escenario
+        <select id="demo-scenario">${MayaRuntime.DEMO_SCENARIOS.map(key => `<option value="${key}" ${Store.demoScenario === key ? 'selected' : ''}>${labels[key]}</option>`).join('')}</select>
+      </label>
+      <button type="button" id="demo-reset" class="btn-ghost">Restablecer</button>`;
+    bar.classList.remove('hidden');
+    $('#demo-scenario').onchange = event => { location.href = MayaRuntime.demoUrl(event.target.value, location); };
+    $('#demo-reset').onclick = async () => {
+      await Store.resetDemo();
+      insightRemoto = null;
+      insightSolicitado = '';
+      toast('Demo restablecido');
+      render();
+    };
+  }
+
   function render() {
     renderTimers();
     actualizarHeader();
+    renderDemoBanner();
+    const stateText = ({ off: 'Sesión bloqueada', busy: 'Guardando localmente', ok: Store.isDemo() ? 'Demo guardado en esta sesión' : 'Guardado y cifrado en este dispositivo', error: 'No se pudo guardar; exporta un respaldo' })[Store.syncState] || 'Estado de guardado';
     $('#sync-dot').className = `sync-dot ${Store.syncState !== 'off' ? Store.syncState : ''}`;
+    $('#sync-dot').title = stateText;
+    $('#sync-dot').setAttribute('aria-label', stateText);
+    document.querySelectorAll('.tab').forEach(tab => {
+      const active = tab.dataset.tab === tabActual;
+      tab.classList.toggle('active', active);
+      if (active) tab.setAttribute('aria-current', 'page');
+      else tab.removeAttribute('aria-current');
+    });
+    main.className = `main view-${tabActual}${vistaMas ? ` subview-${vistaMas}` : ''}`;
     if (tabActual === 'inicio') renderInicio();
     else if (tabActual === 'comida') renderComida();
     else if (tabActual === 'sueno') renderSueno();
     else if (tabActual === 'panal') renderPanal();
     else if (tabActual === 'retos') renderRetos();
     else renderMas();
+    etiquetarControles(main);
   }
 
   /* ============================================================
@@ -2717,7 +3007,11 @@
     $('#login-screen').classList.add('hidden');
     $('#app').classList.remove('hidden');
     Store.loadLocal();
+    aplicarTema((Store.preferences && Store.preferences.theme) || 'system');
+    aplicarRuta();
+    if (!/^#(inicio|comida|sueno|panal|mas)/.test(location.hash)) guardarRuta(true);
     Store.onChange(render);
+    appIniciada = true;
     render();
 
     clearInterval(tickInterval);
@@ -2748,13 +3042,8 @@
     cargarAvatar();
 
     // una sola vez por teléfono: ¿de quién es este dispositivo?
-    if (!Store.getDispositivo()) {
+    if (!Store.isDemo() && !Store.getDispositivo()) {
       setTimeout(preguntarDispositivo, 600);
-    }
-
-    if (Store.canSync()) {
-      await Store.syncNow();
-      render();
     }
   }
 
@@ -2788,13 +3077,14 @@
   }
 
   async function refrescar() {
-    if (!Store.canSync()) { toast('Configura la sincronización en Ajustes'); return; }
     const img = $('#header-avatar');
     img.classList.add('girando');
-    toast('Actualizando… 💗');
-    await Store.syncNow();
+    toast('Comprobando el diario…');
+    await Store.flush();
     img.classList.remove('girando');
-    toast(Store.syncState === 'ok' ? 'Al día ✅' : 'Sin conexión, se intentará después');
+    toast(Store.syncState === 'ok'
+      ? (Store.isDemo() ? 'Demo al día' : 'Todo está guardado y cifrado en este dispositivo')
+      : 'No se pudo guardar; exporta un respaldo');
     render();
   }
   $('#header-refresh').addEventListener('click', refrescar);
@@ -2829,39 +3119,134 @@
     });
   })();
 
-  $('#login-form').addEventListener('submit', async e => {
-    e.preventDefault();
+  function mostrarAuth(tipo) {
+    const crear = tipo === 'create';
+    $('#login-form').classList.toggle('hidden', crear);
+    $('#create-form').classList.toggle('hidden', !crear);
+    $('#auth-login-tab').classList.toggle('active', !crear);
+    $('#auth-create-tab').classList.toggle('active', crear);
+    $('#auth-login-tab').setAttribute('aria-selected', crear ? 'false' : 'true');
+    $('#auth-create-tab').setAttribute('aria-selected', crear ? 'true' : 'false');
+    requestAnimationFrame(() => (crear ? $('#create-user') : $('#login-user')).focus());
+  }
+  $('#auth-login-tab').onclick = () => mostrarAuth('login');
+  $('#auth-create-tab').onclick = () => mostrarAuth('create');
+
+  $('#login-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector('button[type="submit"]');
+    button.disabled = true;
+    button.textContent = 'Abriendo…';
     const ok = await Store.login($('#login-user').value, $('#login-pass').value);
-    if (ok) iniciarApp();
-    else {
-      const err = $('#login-error');
-      err.classList.remove('hidden');
-      err.style.animation = 'none';
-      requestAnimationFrame(() => err.style.animation = '');
+    button.disabled = false;
+    button.textContent = 'Entrar';
+    if (ok) {
+      $('#login-pass').value = '';
+      iniciarApp();
+    } else {
+      const error = $('#login-error');
+      error.classList.remove('hidden');
+      error.style.animation = 'none';
+      requestAnimationFrame(() => error.style.animation = '');
+      $('#login-pass').select();
     }
   });
 
-  // service worker para que funcione sin internet y se pueda instalar
+  $('#create-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const error = $('#create-error');
+    error.classList.add('hidden');
+    const password = $('#create-pass').value;
+    if (password.length < 12) {
+      error.textContent = 'Usa al menos 12 caracteres. Esta contraseña cifra el diario y no se puede recuperar.';
+      error.classList.remove('hidden');
+      $('#create-pass').focus();
+      return;
+    }
+    if (password !== $('#create-pass-confirm').value) {
+      error.textContent = 'Las contraseñas no coinciden.';
+      error.classList.remove('hidden');
+      $('#create-pass-confirm').focus();
+      return;
+    }
+    const button = event.currentTarget.querySelector('button[type="submit"]');
+    button.disabled = true;
+    button.textContent = 'Cifrando el diario…';
+    try {
+      await Store.createAccount({
+        username: $('#create-user').value,
+        displayName: $('#create-user').value,
+        password,
+        babyName: $('#create-baby').value,
+        birth: $('#create-birth').value,
+        importLegacy: !$('#legacy-import-row').classList.contains('hidden') && $('#create-import-legacy').checked,
+      });
+      $('#create-pass').value = '';
+      $('#create-pass-confirm').value = '';
+      await iniciarApp();
+      toast('Diario creado y cifrado en este dispositivo');
+    } catch {
+      error.textContent = 'No se pudo crear la cuenta. Prueba otro usuario y revisa que el almacenamiento esté disponible.';
+      error.classList.remove('hidden');
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Crear diario privado';
+    }
+  });
+
+  $('#btn-demo-login').onclick = () => { location.href = MayaRuntime.demoUrl('steady', location); };
+
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').then(registration => {
+      if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      registration.addEventListener('updatefound', () => {
+        const worker = registration.installing;
+        if (!worker) return;
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            worker.postMessage({ type: 'SKIP_WAITING' });
+            if (appIniciada) toast('Actualización lista; se aplicará al volver a abrir Maya');
+          }
+        });
+      });
+    }).catch(() => {});
   }
 
-  // enlace de configuración (#setup=...): deja lista la sincronización
-  // con un solo toque, sin teclear el token en el celular
-  try {
-    const m = location.hash.match(/[#&]setup=([^&]+)/);
-    if (m) {
-      const cfg = JSON.parse(atob(decodeURIComponent(m[1])));
-      Store.loadLocal();
-      if (cfg.owner) Store.config.owner = cfg.owner;
-      if (cfg.repo) Store.config.repo = cfg.repo;
-      if (cfg.token) Store.config.token = cfg.token;
-      Store.saveConfig();
-      history.replaceState(null, '', location.pathname + location.search);
-      toast('Sincronización configurada ✅');
-    }
-  } catch (e) { console.error('Enlace de configuración no válido', e); }
+  window.addEventListener('offline', () => { if (appIniciada) toast('Sin conexión · el diario sigue disponible'); });
+  window.addEventListener('online', () => { if (appIniciada) toast('Conexión recuperada'); });
+  const darkMedia = matchMedia('(prefers-color-scheme: dark)');
+  const onThemeChange = () => {
+    if ((Store.preferences && Store.preferences.theme) === 'system') aplicarTema('system');
+  };
+  if (darkMedia.addEventListener) darkMedia.addEventListener('change', onThemeChange);
+  else if (darkMedia.addListener) darkMedia.addListener(onThemeChange);
 
-  if (Store.hasSession()) iniciarApp();
-  else $('#login-screen').classList.remove('hidden');
+  async function arrancar() {
+    aplicarTema('system');
+    const scenario = MayaRuntime.scenarioFromLocation(location);
+    if (scenario) {
+      await Store.startDemo(scenario);
+      await iniciarApp();
+      return;
+    }
+
+    const accounts = Store.listAccounts();
+    if (accounts.length === 1) $('#login-user').value = accounts[0].username;
+    const legacy = Store.legacyBaby();
+    if (legacy) {
+      $('#legacy-import-row').classList.remove('hidden');
+      $('#create-user').value = accounts.some(account => account.username === 'maya') ? '' : 'maya';
+      $('#create-baby').value = legacy.nombre || '';
+      $('#create-birth').value = legacy.nacimiento || '';
+    }
+    $('#login-screen').classList.remove('hidden');
+    mostrarAuth(accounts.length ? 'login' : 'create');
+  }
+
+  arrancar().catch(error => {
+    console.error(error);
+    $('#login-screen').classList.remove('hidden');
+    $('#login-error').textContent = 'No se pudo iniciar el almacenamiento local. Recarga la página o usa otro navegador.';
+    $('#login-error').classList.remove('hidden');
+  });
 })();
