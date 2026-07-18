@@ -1840,6 +1840,12 @@
         ${item('crecimiento', '📏', 'bg-blue', 'Crecimiento', d.crecimiento.length ? 'Peso, talla y perímetro' : 'Registra peso y talla')}
         ${item('fotos', '📸', 'bg-lav', 'Fotos', d.fotos.length ? `${d.fotos.length} recuerdos` : 'Momentos especiales')}
         ${item('resumen', '📄', 'bg-yellow', 'Resumen PDF', 'Descarga un reporte con gráficas')}
+        ${(() => { const t = TEMAS.find(x => x.id === (localStorage.getItem(LS_TEMA) || '')) || TEMAS[0]; return `
+        <button class="menu-item" data-accion="cambiar-tema">
+          <span class="mi-emoji bg-lav">🎨</span>
+          <span>Tema de color<span class="mi-sub">Actual: ${t.emoji} ${t.nombre}</span></span>
+          <span class="mi-chev">›</span>
+        </button>`; })()}
         ${item('ajustes', '⚙️', 'bg-pink', 'Ajustes', 'Sincronización, respaldo y sesión')}
       </div>
     `;
