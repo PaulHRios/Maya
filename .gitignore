@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.DS_Store
+Thumbs.db
+datos/
+fotos/
+maya_datos/
+private-data/
+*.private.json
+*.log

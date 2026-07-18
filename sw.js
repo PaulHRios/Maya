@@ -1,10 +1,16 @@
-/* Service worker: deja usar la app sin internet (los datos viven en el
-   dispositivo y se sincronizan cuando vuelve la conexión). */
-const CACHE = 'maya-v2';
+/* Versioned application shell. Private records are never stored in Cache API. */
+const CACHE = 'maya-shell-v4';
 const ARCHIVOS = [
   './',
   './index.html',
   './css/styles.css',
+  './js/runtime.js',
+  './js/data-schema.js',
+  './js/account-vault.js',
+  './js/media-store.js',
+  './js/demo-data.js',
+  './js/insights-engine.js',
+  './js/insights-client.js',
   './js/store.js',
   './js/actividades.js',
   './js/info.js',
@@ -14,6 +20,7 @@ const ARCHIVOS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
+  './icons/maskable-512.png',
   './js/vendor/chart.umd.min.js',
   './js/vendor/jspdf.umd.min.js',
   './js/vendor/jspdf.plugin.autotable.min.js',
@@ -31,19 +38,38 @@ self.addEventListener('activate', e => {
   );
 });
 
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // nunca cachear llamadas a APIs (GitHub, Wikipedia)
-  if (url.hostname.includes('api.github.com') || url.hostname.includes('wikipedia.org')) return;
-  if (e.request.method !== 'GET') return;
+  if (e.request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.includes('/api/')) return;
 
-  e.respondWith(
-    fetch(e.request)
-      .then(res => {
-        const copia = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copia)).catch(() => {});
-        return res;
-      })
-      .catch(() => caches.match(e.request, { ignoreSearch: true }))
-  );
+  if (e.request.mode === 'navigate') {
+    e.respondWith((async () => {
+      try {
+        const network = await fetch(e.request);
+        if (network.ok) {
+          const cache = await caches.open(CACHE);
+          cache.put('./index.html', network.clone()).catch(() => {});
+        }
+        return network;
+      } catch {
+        return (await caches.match('./index.html')) || (await caches.match('./'));
+      }
+    })());
+    return;
+  }
+
+  // Cache-first makes the installed PWA respond immediately on weak networks.
+  const refresh = fetch(e.request).then(async response => {
+    if (response.ok) (await caches.open(CACHE)).put(e.request, response.clone()).catch(() => {});
+    return response;
+  }).catch(() => null);
+  e.waitUntil(refresh);
+  e.respondWith(caches.match(e.request).then(cached => cached || refresh.then(response => {
+    if (response) return response;
+    return new Response('Sin conexión', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  })));
 });
