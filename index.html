@@ -2,10 +2,10 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Maya</title>
 <meta name="description" content="Registro de salud y cuidados de Maya">
-<meta name="theme-color" content="#fff5f8">
+<meta name="theme-color" content="#fbf7f6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -35,6 +35,8 @@
 <!-- ====== APP ====== -->
 <div id="app" class="app hidden">
 
+  <a class="skip-link" href="#main">Ir al contenido</a>
+
   <div id="ptr" class="ptr"><span class="ptr-spinner">💗</span></div>
 
   <header class="app-header">
@@ -46,8 +48,9 @@
       </div>
     </div>
     <div class="header-right">
-      <span id="sync-dot" class="sync-dot" title="Sincronización"></span>
-      <button id="btn-settings" class="icon-btn" aria-label="Ajustes">⚙️</button>
+      <span id="sync-dot" class="sync-dot" role="status" aria-label="Estado de sincronización" title="Sincronización"></span>
+      <button id="btn-privacy" class="icon-btn privacy-btn" type="button" aria-label="Activar modo discreto" aria-pressed="false">◉</button>
+      <button id="btn-settings" class="icon-btn" type="button" aria-label="Ajustes">⚙️</button>
     </div>
   </header>
 
@@ -56,27 +59,28 @@
   <!-- Banner de timers activos (lactancia / sueño) -->
   <div id="active-timers" class="active-timers"></div>
 
-  <main id="main" class="main"></main>
+  <main id="main" class="main" tabindex="-1"></main>
 
-  <nav class="tabbar">
-    <button class="tab active" data-tab="inicio"><span class="tab-icon">🏠</span><span>Inicio</span></button>
-    <button class="tab" data-tab="comida"><span class="tab-icon">🍼</span><span>Comida</span></button>
-    <button class="tab" data-tab="sueno"><span class="tab-icon">🌙</span><span>Sueño</span></button>
-    <button class="tab" data-tab="panal"><span class="tab-icon">💧</span><span>Pañal</span></button>
-    <button class="tab" data-tab="retos"><span class="tab-icon">🏆</span><span>Retos</span></button>
-    <button class="tab" data-tab="mas"><span class="tab-icon">✨</span><span>Más</span></button>
+  <nav class="tabbar" aria-label="Secciones principales">
+    <button type="button" class="tab active" data-tab="inicio" aria-current="page"><span class="tab-icon">🏠</span><span>Inicio</span></button>
+    <button type="button" class="tab" data-tab="comida"><span class="tab-icon">🍼</span><span>Comida</span></button>
+    <button type="button" class="tab" data-tab="sueno"><span class="tab-icon">🌙</span><span>Sueño</span></button>
+    <button type="button" class="tab" data-tab="panal"><span class="tab-icon">💧</span><span>Pañal</span></button>
+    <button type="button" class="tab" data-tab="retos"><span class="tab-icon">🏆</span><span>Retos</span></button>
+    <button type="button" class="tab" data-tab="mas"><span class="tab-icon">✨</span><span>Más</span></button>
   </nav>
 
 </div>
 
 <!-- ====== HOJA MODAL ====== -->
-<div id="sheet-backdrop" class="sheet-backdrop hidden"></div>
-<div id="sheet" class="sheet hidden">
+<div id="sheet-backdrop" class="sheet-backdrop hidden" role="presentation"></div>
+<div id="sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Formulario" tabindex="-1">
   <div class="sheet-handle"></div>
+  <button id="sheet-close" class="sheet-close" type="button" aria-label="Cerrar formulario">×</button>
   <div id="sheet-content"></div>
 </div>
 
-<div id="toast" class="toast hidden"></div>
+<div id="toast" class="toast hidden" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <!-- canvas oculto para gráficas del PDF -->
 <canvas id="pdf-canvas" width="900" height="450" style="display:none"></canvas>
