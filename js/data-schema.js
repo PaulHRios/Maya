@@ -49,6 +49,17 @@
     return /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(cleaned) ? cleaned : '';
   }
 
+  function isoDate(value) {
+    const cleaned = text(value, 40);
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(cleaned)) return '';
+    try {
+      const parsed = new Date(cleaned);
+      return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : '';
+    } catch {
+      return '';
+    }
+  }
+
   function number(value, min, max, allowNull = false) {
     if ((value === '' || value === null || value === undefined) && allowNull) return null;
     const parsed = Number(value);
@@ -136,6 +147,9 @@
             texto: text(link && link.texto, 150),
             url: safeUrl(link && link.url),
           })).filter(link => link.url) : [],
+          consultado: isoDate(item.info.consultado),
+          extraWiki: typeof item.info.extraWiki === 'string'
+            ? text(item.info.extraWiki, 4000) : null,
         };
       }
       return { ...base(item), nombre: text(item.nombre, 120), unidad: text(item.unidad, 40), mediciones, info };
