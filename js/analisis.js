@@ -27,6 +27,7 @@ const Analisis = (() => {
 
   /* genera el reporte: { estado, hallazgos:[{nivel, emoji, titulo, texto, dato}], confianza } */
   function generar(data, edadDias) {
+    const en = typeof I18N !== 'undefined' && I18N.lang === 'en';
     const h = [];
     const hoy24 = 24;
 
@@ -34,9 +35,9 @@ const Analisis = (() => {
     const pipi24 = enVentana(data.panales, 'hora', hoy24)
       .filter(p => p.tipo === 'pipi' || p.tipo === 'mixto').length;
     if (edadDias !== null && edadDias >= 5) {
-      if (pipi24 >= 6) h.push({ nivel: 'bien', emoji: '💧', titulo: 'Hidratación en orden', texto: `${pipi24} pañales con pipí en 24 h — señal de que está comiendo y tomando suficiente.`, dato: 'esperado: 6 o más al día desde el día 5' });
-      else if (pipi24 >= 4) h.push({ nivel: 'observar', emoji: '💧', titulo: 'Pipí un poco baja', texto: `${pipi24} pañales con pipí en 24 h. Vale la pena vigilar las próximas horas y ofrecer tomas frecuentes.`, dato: 'esperado: 6+ al día' });
-      else h.push({ nivel: 'atencion', emoji: '💧', titulo: 'Pocos pañales mojados', texto: `Solo ${pipi24} en 24 h. Si además está adormilada o come poco, coméntenlo hoy mismo con el pediatra.`, dato: 'menos de 4 al día amerita consulta' });
+      if (pipi24 >= 6) h.push({ nivel: 'bien', emoji: '💧', titulo: en ? 'Hydration on track' : 'Hidratación en orden', texto: en ? `${pipi24} wet diapers in 24 h — a sign she's eating and drinking enough.` : `${pipi24} pañales con pipí en 24 h — señal de que está comiendo y tomando suficiente.`, dato: en ? 'expected: 6+ per day from day 5' : 'esperado: 6 o más al día desde el día 5' });
+      else if (pipi24 >= 4) h.push({ nivel: 'observar', emoji: '💧', titulo: en ? 'Pee running a bit low' : 'Pipí un poco baja', texto: en ? `${pipi24} wet diapers in 24 h. Worth watching the next few hours and offering frequent feeds.` : `${pipi24} pañales con pipí en 24 h. Vale la pena vigilar las próximas horas y ofrecer tomas frecuentes.`, dato: en ? 'expected: 6+ per day' : 'esperado: 6+ al día' });
+      else h.push({ nivel: 'atencion', emoji: '💧', titulo: en ? 'Few wet diapers' : 'Pocos pañales mojados', texto: en ? `Only ${pipi24} in 24 h. If she's also drowsy or feeding little, call the pediatrician today.` : `Solo ${pipi24} en 24 h. Si además está adormilada o come poco, coméntenlo hoy mismo con el pediatra.`, dato: en ? 'under 4 a day warrants a call' : 'menos de 4 al día amerita consulta' });
     }
 
     /* ---- popó: frecuencia y colores de alerta ---- */
@@ -48,21 +49,21 @@ const Analisis = (() => {
     })();
     if (horasSinPopo !== null) {
       if (edadDias !== null && edadDias <= 42 && horasSinPopo >= 48) {
-        h.push({ nivel: 'observar', emoji: '💩', titulo: `${Math.floor(horasSinPopo / 24)} días sin popó`, texto: 'En el primer mes suele haber popó casi a diario. Si pasa de 3 días, se ve incómoda o el abdomen está duro, consúltenlo.', dato: 'lactancia materna >6 semanas sí puede espaciar días' });
+        h.push({ nivel: 'observar', emoji: '💩', titulo: en ? `${Math.floor(horasSinPopo / 24)} days without poop` : `${Math.floor(horasSinPopo / 24)} días sin popó`, texto: en ? 'In the first month there is usually poop almost daily. If it goes past 3 days, she seems uncomfortable or her belly is firm, check with the doctor.' : 'En el primer mes suele haber popó casi a diario. Si pasa de 3 días, se ve incómoda o el abdomen está duro, consúltenlo.', dato: en ? 'breastfed babies >6 weeks can space out days' : 'lactancia materna >6 semanas sí puede espaciar días' });
       } else if (horasSinPopo < 48) {
-        h.push({ nivel: 'bien', emoji: '💩', titulo: 'Popó al corriente', texto: `Última hace ${horasSinPopo < 1 ? 'menos de una hora' : horasSinPopo + ' h'}${popo72.length ? `, ${popo72.length} en 3 días` : ''}.` });
+        h.push({ nivel: 'bien', emoji: '💩', titulo: en ? 'Poop on schedule' : 'Popó al corriente', texto: en ? `Last one ${horasSinPopo < 1 ? 'under an hour ago' : horasSinPopo + ' h ago'}${popo72.length ? `, ${popo72.length} in 3 days` : ''}.` : `Última hace ${horasSinPopo < 1 ? 'menos de una hora' : horasSinPopo + ' h'}${popo72.length ? `, ${popo72.length} en 3 días` : ''}.` });
       }
     }
     const colorAlerta = enVentana(data.panales, 'hora', 72).find(p => p.color === 'rojo' || p.color === 'gris');
-    if (colorAlerta) h.push({ nivel: 'atencion', emoji: '🎨', titulo: `Popó ${colorAlerta.color === 'rojo' ? 'rojiza' : 'blanca/gris'} registrada`, texto: 'Ese color amerita comentarlo con el pediatra pronto (llévenle la foto si la guardaron).' });
+    if (colorAlerta) h.push({ nivel: 'atencion', emoji: '🎨', titulo: en ? `${colorAlerta.color === 'rojo' ? 'Reddish' : 'White/gray'} stool logged` : `Popó ${colorAlerta.color === 'rojo' ? 'rojiza' : 'blanca/gris'} registrada`, texto: en ? 'That color deserves a prompt mention to the pediatrician (bring the photo if you saved it).' : 'Ese color amerita comentarlo con el pediatra pronto (llévenle la foto si la guardaron).' });
 
     /* ---- alimentación: frecuencia, hueco máximo y volumen vs su línea base ---- */
     const tomas24 = enVentana(data.tomas, 'inicio', hoy24);
     if (tomas24.length) {
       if (edadDias !== null && edadDias <= 60) {
-        if (tomas24.length >= 8) h.push({ nivel: 'bien', emoji: '🍼', titulo: 'Comiendo con buena frecuencia', texto: `${tomas24.length} tomas en 24 h.`, dato: 'esperado: 8–12 en los primeros dos meses' });
-        else if (tomas24.length >= 6) h.push({ nivel: 'observar', emoji: '🍼', titulo: 'Frecuencia de tomas justa', texto: `${tomas24.length} tomas en 24 h; intenten acercarse a 8, despertándola si duerme de más de día.`, dato: 'esperado: 8–12' });
-        else h.push({ nivel: 'atencion', emoji: '🍼', titulo: 'Pocas tomas registradas', texto: `${tomas24.length} en 24 h. Si de verdad comió tan poco (y no es falta de registro), coméntenlo con el pediatra.` });
+        if (tomas24.length >= 8) h.push({ nivel: 'bien', emoji: '🍼', titulo: en ? 'Feeding at a great pace' : 'Comiendo con buena frecuencia', texto: en ? `${tomas24.length} feeds in 24 h.` : `${tomas24.length} tomas en 24 h.`, dato: en ? 'expected: 8–12 in the first two months' : 'esperado: 8–12 en los primeros dos meses' });
+        else if (tomas24.length >= 6) h.push({ nivel: 'observar', emoji: '🍼', titulo: en ? 'Feeds a bit sparse' : 'Frecuencia de tomas justa', texto: en ? `${tomas24.length} feeds in 24 h; try to get closer to 8, waking her from long day naps if needed.` : `${tomas24.length} tomas en 24 h; intenten acercarse a 8, despertándola si duerme de más de día.`, dato: en ? 'expected: 8–12' : 'esperado: 8–12' });
+        else h.push({ nivel: 'atencion', emoji: '🍼', titulo: en ? 'Few feeds logged' : 'Pocas tomas registradas', texto: en ? `${tomas24.length} in 24 h. If she truly ate that little (and it's not just missed logging), mention it to the pediatrician.` : `${tomas24.length} en 24 h. Si de verdad comió tan poco (y no es falta de registro), coméntenlo con el pediatra.` });
       }
       const orden = [...tomas24].sort((a, b) => a.inicio.localeCompare(b.inicio));
       let hueco = 0;
@@ -70,15 +71,15 @@ const Analisis = (() => {
       hueco = Math.max(hueco, Date.now() - new Date(orden[orden.length - 1].inicio));
       const huecoH = Math.round(hueco / 360000) / 10;
       if (edadDias !== null && edadDias <= 30 && huecoH >= 5) {
-        h.push({ nivel: 'observar', emoji: '⏰', titulo: `Hueco de ${huecoH} h entre tomas`, texto: 'En el primer mes conviene no pasar de ~4 horas sin comer, incluso despertándola.' });
+        h.push({ nivel: 'observar', emoji: '⏰', titulo: en ? `${huecoH} h gap between feeds` : `Hueco de ${huecoH} h entre tomas`, texto: en ? 'In the first month it is best not to go past ~4 hours without eating, even waking her.' : 'En el primer mes conviene no pasar de ~4 horas sin comer, incluso despertándola.' });
       }
     }
     const mlBase = lineaBase(data.tomas, 'inicio', t => Number(t.ml) || 0);
     const ml24 = tomas24.reduce((s, t) => s + (Number(t.ml) || 0), 0);
     if (mlBase && mlBase > 30) {
       const cambio = Math.round(((ml24 - mlBase) / mlBase) * 100);
-      if (cambio <= -30) h.push({ nivel: 'observar', emoji: '📉', titulo: `Biberones ${Math.abs(cambio)}% abajo de su ritmo`, texto: `${ml24} ml hoy contra ~${Math.round(mlBase)} ml diarios de su propia semana. Puede ser un día flojo o falta de registro — vigilen la siguiente toma.`, dato: 'comparado con su línea base de 3 días' });
-      else if (cambio >= 30) h.push({ nivel: 'bien', emoji: '📈', titulo: `Comiendo ${cambio}% más que su ritmo`, texto: `${ml24} ml hoy vs ~${Math.round(mlBase)} ml. Los brotes de crecimiento se ven así.` });
+      if (cambio <= -30) h.push({ nivel: 'observar', emoji: '📉', titulo: en ? `Bottles ${Math.abs(cambio)}% below her rhythm` : `Biberones ${Math.abs(cambio)}% abajo de su ritmo`, texto: en ? `${ml24} ml today vs ~${Math.round(mlBase)} ml daily from her own week. Could be a slow day or missed logging — watch the next feed.` : `${ml24} ml hoy contra ~${Math.round(mlBase)} ml diarios de su propia semana. Puede ser un día flojo o falta de registro — vigilen la siguiente toma.`, dato: en ? 'vs her own 3-day baseline' : 'comparado con su línea base de 3 días' });
+      else if (cambio >= 30) h.push({ nivel: 'bien', emoji: '📈', titulo: en ? `Eating ${cambio}% above her rhythm` : `Comiendo ${cambio}% más que su ritmo`, texto: en ? `${ml24} ml today vs ~${Math.round(mlBase)} ml. Growth spurts look exactly like this.` : `${ml24} ml hoy vs ~${Math.round(mlBase)} ml. Los brotes de crecimiento se ven así.` });
     }
 
     /* ---- peso ---- */
@@ -87,12 +88,12 @@ const Analisis = (() => {
       const a = pesos[pesos.length - 2], b = pesos[pesos.length - 1];
       const dias = Math.max(1, Math.round((new Date(b.fecha) - new Date(a.fecha)) / DIA));
       const gxd = Math.round(((b.pesoKg - a.pesoKg) * 1000) / dias);
-      if (gxd >= 20) h.push({ nivel: 'bien', emoji: '⚖️', titulo: `Subiendo ~${gxd} g por día`, texto: `De ${a.pesoKg} a ${b.pesoKg} kg. Excelente ritmo.`, dato: 'esperado: 20–40 g/día tras la primera semana' });
-      else if (gxd >= 0) h.push({ nivel: 'observar', emoji: '⚖️', titulo: `Subiendo despacio (~${gxd} g/día)`, texto: 'Que el pediatra confirme el ritmo en la próxima consulta; registren cada pesada aquí.' });
-      else h.push({ nivel: 'atencion', emoji: '⚖️', titulo: 'El peso bajó entre medidas', texto: `De ${a.pesoKg} a ${b.pesoKg} kg. Después de la primera semana el peso debería subir — coméntenlo con el pediatra.` });
+      if (gxd >= 20) h.push({ nivel: 'bien', emoji: '⚖️', titulo: en ? `Gaining ~${gxd} g per day` : `Subiendo ~${gxd} g por día`, texto: en ? `From ${a.pesoKg} to ${b.pesoKg} kg. Excellent pace.` : `De ${a.pesoKg} a ${b.pesoKg} kg. Excelente ritmo.`, dato: en ? 'expected: 20–40 g/day after the first week' : 'esperado: 20–40 g/día tras la primera semana' });
+      else if (gxd >= 0) h.push({ nivel: 'observar', emoji: '⚖️', titulo: en ? `Gaining slowly (~${gxd} g/day)` : `Subiendo despacio (~${gxd} g/día)`, texto: en ? 'Have the pediatrician confirm the pace at the next visit; log every weigh-in here.' : 'Que el pediatra confirme el ritmo en la próxima consulta; registren cada pesada aquí.' });
+      else h.push({ nivel: 'atencion', emoji: '⚖️', titulo: en ? 'Weight dropped between weigh-ins' : 'El peso bajó entre medidas', texto: en ? `From ${a.pesoKg} to ${b.pesoKg} kg. After the first week weight should be climbing — bring it up with the pediatrician.` : `De ${a.pesoKg} a ${b.pesoKg} kg. Después de la primera semana el peso debería subir — coméntenlo con el pediatra.` });
       const nac = pesos[0];
       if (edadDias !== null && edadDias >= 14 && b.pesoKg < nac.pesoKg) {
-        h.push({ nivel: 'atencion', emoji: '⚖️', titulo: 'Aún no recupera el peso de nacimiento', texto: 'A los 14 días la mayoría ya lo recuperó; amerita revisión del pediatra.' });
+        h.push({ nivel: 'atencion', emoji: '⚖️', titulo: en ? 'Not back to birth weight yet' : 'Aún no recupera el peso de nacimiento', texto: en ? 'Most babies are back by day 14; worth a pediatric check.' : 'A los 14 días la mayoría ya lo recuperó; amerita revisión del pediatra.' });
       }
     }
 
@@ -102,13 +103,13 @@ const Analisis = (() => {
       const pendiente = meds.find(m => m.valor === null || m.valor === '');
       if (pendiente) {
         const hrs = Math.floor((Date.now() - new Date(pendiente.fecha)) / 3600000);
-        h.push({ nivel: 'observar', emoji: '🧪', titulo: `${c.nombre}: resultado pendiente`, texto: `La muestra fue hace ${hrs < 24 ? hrs + ' h' : Math.floor(hrs / 24) + ' día(s)'}. En cuanto llegue, captúrenlo para ver la tendencia.` });
+        h.push({ nivel: 'observar', emoji: '🧪', titulo: en ? `${c.nombre}: result pending` : `${c.nombre}: resultado pendiente`, texto: en ? `Sample taken ${hrs < 24 ? hrs + ' h' : Math.floor(hrs / 24) + ' day(s)'} ago. Log it as soon as it arrives to see the trend.` : `La muestra fue hace ${hrs < 24 ? hrs + ' h' : Math.floor(hrs / 24) + ' día(s)'}. En cuanto llegue, captúrenlo para ver la tendencia.` });
       }
       const conValor = meds.filter(m => m.valor !== null && m.valor !== '');
       if (conValor.length >= 2) {
         const ult = conValor[conValor.length - 1], prev = conValor[conValor.length - 2];
-        if (Number(ult.valor) > Number(prev.valor)) h.push({ nivel: 'observar', emoji: '🩺', titulo: `${c.nombre} al alza`, texto: `Última medición ${ult.valor}${c.unidad ? ' ' + c.unidad : ''} (antes ${prev.valor}). Sigan los controles que indique el pediatra.` });
-        else h.push({ nivel: 'bien', emoji: '🩺', titulo: `${c.nombre} bajando`, texto: `De ${prev.valor} a ${ult.valor}${c.unidad ? ' ' + c.unidad : ''} — buena señal.` });
+        if (Number(ult.valor) > Number(prev.valor)) h.push({ nivel: 'observar', emoji: '🩺', titulo: en ? `${c.nombre} trending up` : `${c.nombre} al alza`, texto: en ? `Latest reading ${ult.valor}${c.unidad ? ' ' + c.unidad : ''} (was ${prev.valor}). Keep the follow-ups your pediatrician set.` : `Última medición ${ult.valor}${c.unidad ? ' ' + c.unidad : ''} (antes ${prev.valor}). Sigan los controles que indique el pediatra.` });
+        else h.push({ nivel: 'bien', emoji: '🩺', titulo: en ? `${c.nombre} coming down` : `${c.nombre} bajando`, texto: en ? `From ${prev.valor} to ${ult.valor}${c.unidad ? ' ' + c.unidad : ''} — a good sign.` : `De ${prev.valor} a ${ult.valor}${c.unidad ? ' ' + c.unidad : ''} — buena señal.` });
       }
     }
 
@@ -118,7 +119,7 @@ const Analisis = (() => {
     const suenoBase = lineaBase(data.suenos, 'inicio', msSueno);
     if (suenoBase && suenoBase > 2 * 3600000) {
       const baseH = suenoBase / 3600000;
-      if (sueno24 < baseH * 0.6) h.push({ nivel: 'observar', emoji: '🌙', titulo: 'Durmió menos que su ritmo', texto: `${Math.round(sueno24 * 10) / 10} h registradas hoy vs ~${Math.round(baseH * 10) / 10} h diarias suyas. Puede ser un día movido o registros que faltaron.` });
+      if (sueno24 < baseH * 0.6) h.push({ nivel: 'observar', emoji: '🌙', titulo: en ? 'Slept less than her rhythm' : 'Durmió menos que su ritmo', texto: en ? `${Math.round(sueno24 * 10) / 10} h logged today vs ~${Math.round(baseH * 10) / 10} h of her usual. Could be a busy day or missed logs.` : `${Math.round(sueno24 * 10) / 10} h registradas hoy vs ~${Math.round(baseH * 10) / 10} h diarias suyas. Puede ser un día movido o registros que faltaron.` });
     }
 
     /* ---- confianza según cuántos datos hay ---- */
@@ -129,9 +130,9 @@ const Analisis = (() => {
     h.sort((a, b) => niveles[b.nivel] - niveles[a.nivel]);
     const peor = h[0] ? h[0].nivel : 'bien';
     const estado = {
-      bien: { emoji: '🌟', color: 'linear-gradient(135deg,#4cc38a,#2ea06d)', titulo: 'Va muy bien', sub: 'Sus números se ven sanos y constantes.' },
-      observar: { emoji: '👀', color: 'linear-gradient(135deg,#f5b54a,#e79a1f)', titulo: 'Bien, con cositas que observar', sub: 'Nada urgente; hay detalles para tener en el radar.' },
-      atencion: { emoji: '📞', color: 'linear-gradient(135deg,#e25555,#c73e3e)', titulo: 'Hay algo que comentar al pediatra', sub: 'Revisen los puntos rojos de abajo.' },
+      bien: { emoji: '🌟', color: 'linear-gradient(135deg,#4cc38a,#2ea06d)', titulo: en ? 'Doing great' : 'Va muy bien', sub: en ? 'Her numbers look healthy and steady.' : 'Sus números se ven sanos y constantes.' },
+      observar: { emoji: '👀', color: 'linear-gradient(135deg,#f5b54a,#e79a1f)', titulo: en ? 'Good, with a few things to watch' : 'Bien, con cositas que observar', sub: en ? 'Nothing urgent; a few details for the radar.' : 'Nada urgente; hay detalles para tener en el radar.' },
+      atencion: { emoji: '📞', color: 'linear-gradient(135deg,#e25555,#c73e3e)', titulo: en ? 'Something to raise with the pediatrician' : 'Hay algo que comentar al pediatra', sub: en ? 'Check the red items below.' : 'Revisen los puntos rojos de abajo.' },
     }[peor];
 
     return { estado, hallazgos: h, confianza };
@@ -204,6 +205,43 @@ const Analisis = (() => {
       alivio: ['Despedidas cortas y alegres, sin escaparse a escondidas.', 'Jugar peekaboo ensaya justo esto (está en sus Retos).'],
     },
   ];
+
+
+  /* traduccion EN de la guia de etapas (aplicada al cargar) */
+  if (typeof I18N !== 'undefined' && I18N.lang === 'en') {
+    const E_EN = {
+      reflejos: ['Hiccups, sneezes & irregular breathing', 'Totally normal at this age: her nervous system is maturing. Hiccups bother her far less than they seem to.',
+        ['No need to "cure" hiccups; they pass on their own.', 'Frequent sneezing is not a cold: it is how she clears her nose.']],
+      brotes: ['Growth spurts (~10 days, 3 & 6 weeks)', 'Suddenly she wants to eat constantly and is fussy for 1-3 days. Milk is not lacking: she is "ordering" more supply.',
+        ['Offer breast/bottle on demand those days.', 'Usually settles by itself in 2-3 days.']],
+      piel: ['Baby acne & cradle cap', 'Little pimples on the face and flaky scalp are common from pregnancy hormones. Painless, and they clear on their own.',
+        ['No squeezing or scrubbing; wash with warm water only.', 'For cradle cap: baby oil 15 min before bath and a soft brush.']],
+      colicos: ['Colic & the "witching hour" (evenings)', 'Between weeks 2 and 12-14 many babies cry more at dusk for no clear reason, peaking near week 6. Exhausting, but normal - and it passes.',
+        ['The 5 S\'s: swaddle, side-lying in arms, strong shhh (white noise), swing gently, let her suck.', 'Bicycle legs and clockwise tummy massage.', 'Take turns - your wake-window log tells you what worked.']],
+      vacunas2m: ['2-month vaccines coming up', 'The big vaccine round. Mild soreness, low fever and extra sleepiness for 1-2 days are common after.',
+        ['Nursing during/after the shot genuinely soothes.', 'Skin-to-skin that evening.', 'Fever medicine only with the pediatrician\'s dosing.']],
+      babas: ['Drool everywhere & hands in mouth', 'Around 2-3 months they drool a lot and eat their fists. Usually not teeth yet: it is exploration plus maturing glands.',
+        ['Bibs, and change damp clothes to avoid neck rash.']],
+      regresion4m: ['The 4-month sleep "regression"', 'Her sleep matures into adult-like cycles and she may wake more often for a few weeks. Nothing is wrong.',
+        ['Short, consistent bedtime routine (bath, feed, song).', 'Putting her down drowsy but awake helps her link cycles.', 'Wake windows of ~90-120 min at this age.']],
+      dientes: ['Teeth are probably coming', 'Between 4 and 7 months the first ones usually appear (bottom front). Signs: swollen gums, extra drool, biting everything, crankiness.',
+        ['Chilled teether (cold, never frozen).', 'Massage gums with a clean finger or cool gauze.', 'Benzocaine gels are NOT recommended; medicine only with the pediatrician.']],
+      solidos: ['Solid food is near (~6 months)', 'Around 6 months, if she sits with support and eyes your plate, complementary feeding begins.',
+        ['Milk remains the main food until age one.', 'Start with purees or soft pieces (whichever method your pediatrician prefers).']],
+      separacion: ['Separation anxiety', 'Between 7 and 10 months many cry when mom or dad leaves the room: she now knows you exist out of sight. It is progress, not regression.',
+        ['Short, cheerful goodbyes - no sneaking away.', 'Peekaboo practices exactly this (it is in her Goals).']],
+    };
+    const C_EN = {
+      colicos: 'A white-noise app or speaker helps a lot; anti-colic drops only if the pediatrician prescribes them.',
+      dientes: 'Stock up on: a refrigerable teether, absorbent bibs and barrier cream for her chin.',
+      solidos: 'Start gathering: a stable high chair, soft spoons and pocket bibs.',
+    };
+    ETAPAS_COMUNES.forEach(e => {
+      const tr = E_EN[e.key];
+      if (tr) { e.titulo = tr[0]; e.texto = tr[1]; if (e.alivio) e.alivio = tr[2]; }
+      if (C_EN[e.key]) e.compra = C_EN[e.key];
+    });
+  }
 
   function comunes(edadDias) {
     if (edadDias === null) return [];

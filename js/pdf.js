@@ -60,6 +60,7 @@ const PDFResumen = (() => {
   }
 
   async function generar({ desde, hasta, secciones }) {
+    const en = I18N.lang === 'en';
     const d = Store.data;
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
@@ -72,19 +73,19 @@ const PDFResumen = (() => {
     doc.setFontSize(26);
     doc.setTextColor(217, 79, 132);
     doc.setFont(undefined, 'bold');
-    doc.text(`Resumen de ${d.bebe.nombre || 'Maya'} 💗`.replace(' 💗', ''), 14, 20);
+    doc.text((en ? `${d.bebe.nombre || 'Baby'}'s Report` : `Resumen de ${d.bebe.nombre || 'Maya'}`), 14, 20);
     doc.setFontSize(11);
     doc.setFont(undefined, 'normal');
     doc.setTextColor(120, 100, 115);
-    doc.text(`Del ${desde.toLocaleDateString(I18N.loc(), { dateStyle: 'long' })} al ${hasta.toLocaleDateString(I18N.loc(), { dateStyle: 'long' })}`, 14, 29);
+    doc.text((en ? `From ${desde.toLocaleDateString(I18N.loc(), { dateStyle: 'long' })} to ${hasta.toLocaleDateString(I18N.loc(), { dateStyle: 'long' })}` : `Del ${desde.toLocaleDateString(I18N.loc(), { dateStyle: 'long' })} al ${hasta.toLocaleDateString(I18N.loc(), { dateStyle: 'long' })}`), 14, 29);
     if (d.bebe.nacimiento) {
       const nacio = new Date(`${d.bebe.nacimiento}T${d.bebe.hora || '12:00'}`);
       const edadDias = Math.floor((hasta - nacio) / 86400000);
-      const horaTxt = d.bebe.hora ? ` a las ${nacio.toLocaleTimeString(I18N.loc(), { hour: 'numeric', minute: '2-digit' })}` : '';
-      doc.text(`Nació el ${nacio.toLocaleDateString(I18N.loc(), { dateStyle: 'long' })}${horaTxt} · ${edadDias} días de vida`, 14, 36);
+      const horaTxt = d.bebe.hora ? (en ? ` at ${nacio.toLocaleTimeString(I18N.loc(), { hour: 'numeric', minute: '2-digit' })}` : ` a las ${nacio.toLocaleTimeString(I18N.loc(), { hour: 'numeric', minute: '2-digit' })}`) : '';
+      doc.text((en ? `Born ${nacio.toLocaleDateString(I18N.loc(), { dateStyle: 'long' })}${horaTxt} · ${edadDias} days old` : `Nació el ${nacio.toLocaleDateString(I18N.loc(), { dateStyle: 'long' })}${horaTxt} · ${edadDias} días de vida`), 14, 36);
     }
     if (d.bebe.mama || d.bebe.papa) {
-      const papas = [d.bebe.mama && `Mamá: ${d.bebe.mama}`, d.bebe.papa && `Papá: ${d.bebe.papa}`].filter(Boolean).join(' · ');
+      const papas = [d.bebe.mama && `${en ? 'Mom' : 'Mamá'}: ${d.bebe.mama}`, d.bebe.papa && `${en ? 'Dad' : 'Papá'}: ${d.bebe.papa}`].filter(Boolean).join(' · ');
       doc.text(papas, 14, 43);
     }
     let y = 60;
@@ -92,7 +93,7 @@ const PDFResumen = (() => {
     /* ---- Alimentación ---- */
     if (secciones.tomas) {
       const tomas = d.tomas.filter(t => enRango(t.inicio)).sort((a, b) => a.inicio.localeCompare(b.inicio));
-      y = encabezadoSeccion(doc, y, 'Alimentación');
+      y = encabezadoSeccion(doc, y, en ? 'Feeding' : 'Alimentación');
       if (tomas.length) {
         const porDia = dias.map(dia => {
           const del = tomas.filter(t => mismoDia(t.inicio, dia));
@@ -107,30 +108,30 @@ const PDFResumen = (() => {
           data: {
             labels: dias.map(fmtFecha),
             datasets: [
-              { label: 'Mililitros por día', data: porDia.map(p => p.ml), backgroundColor: '#f06a9b', borderRadius: 8 },
-              { label: 'Minutos al pecho', data: porDia.map(p => p.min), backgroundColor: '#b39df5', borderRadius: 8 },
+              { label: en ? 'Milliliters per day' : 'Mililitros por día', data: porDia.map(p => p.ml), backgroundColor: '#f06a9b', borderRadius: 8 },
+              { label: en ? 'Minutes nursing' : 'Minutos al pecho', data: porDia.map(p => p.min), backgroundColor: '#b39df5', borderRadius: 8 },
             ],
           },
         });
         doc.addImage(img, 'JPEG', 14, y, 182, 91);
         y += 100;
-        const nombreTipo = { materno: 'Materna', donante: 'Extraída', formula: 'Fórmula' };
-        y = tabla(doc, y, ['Fecha y hora', 'Tipo', 'Lado', 'Duración', 'ml', 'Notas'],
+        const nombreTipo = en ? { materno: 'Breast', donante: 'Expressed', formula: 'Formula' } : { materno: 'Materna', donante: 'Extraída', formula: 'Fórmula' };
+        y = tabla(doc, y, (en ? ['Date & time', 'Type', 'Side', 'Duration', 'ml', 'Notes'] : ['Fecha y hora', 'Tipo', 'Lado', 'Duración', 'ml', 'Notas']),
           tomas.map(t => [
             fmtFechaHora(t.inicio),
             nombreTipo[t.tipo] || t.tipo,
-            t.lado === 'izq' ? 'Izquierda' : t.lado === 'der' ? 'Derecha' : '—',
+            t.lado === 'izq' ? (en ? 'Left' : 'Izquierda') : t.lado === 'der' ? (en ? 'Right' : 'Derecha') : '—',
             t.duracionSeg ? `${Math.round(t.duracionSeg / 60)} min` : '—',
             t.ml || '—',
             t.notas || '',
           ]));
-      } else { doc.setFontSize(10); doc.text('Sin registros en este periodo.', 14, y + 6); y += 16; }
+      } else { doc.setFontSize(10); doc.text((en ? 'No entries in this period.' : 'Sin registros en este periodo.'), 14, y + 6); y += 16; }
     }
 
     /* ---- Pañales ---- */
     if (secciones.panales) {
       const pan = d.panales.filter(p => enRango(p.hora)).sort((a, b) => a.hora.localeCompare(b.hora));
-      y = encabezadoSeccion(doc, y, 'Pañales (pipí y popó)');
+      y = encabezadoSeccion(doc, y, en ? 'Diapers (pee & poop)' : 'Pañales (pipí y popó)');
       if (pan.length) {
         const cuenta = tipo => dias.map(dia => pan.filter(p => mismoDia(p.hora, dia) && (p.tipo === tipo || p.tipo === 'mixto')).length);
         // pañales físicos: cada registro es un pañal (mixto cuenta uno)
@@ -140,28 +141,28 @@ const PDFResumen = (() => {
           data: {
             labels: dias.map(fmtFecha),
             datasets: [
-              { label: 'Pipí', data: cuenta('pipi'), backgroundColor: '#3d8fe0', borderRadius: 8 },
-              { label: 'Popó', data: cuenta('popo'), backgroundColor: '#a06a2c', borderRadius: 8 },
-              { label: 'Pañales usados', data: usados, type: 'line', borderColor: '#d94f84', backgroundColor: '#d94f84', tension: .3, pointRadius: 4 },
+              { label: en ? 'Pee' : 'Pipí', data: cuenta('pipi'), backgroundColor: '#3d8fe0', borderRadius: 8 },
+              { label: en ? 'Poop' : 'Popó', data: cuenta('popo'), backgroundColor: '#a06a2c', borderRadius: 8 },
+              { label: en ? 'Diapers used' : 'Pañales usados', data: usados, type: 'line', borderColor: '#d94f84', backgroundColor: '#d94f84', tension: .3, pointRadius: 4 },
             ],
           },
           options: { scales: { y: { ticks: { stepSize: 1 } } } },
         });
         doc.addImage(img, 'JPEG', 14, y, 182, 91);
         y += 100;
-        const nombre = { pipi: 'Pipí', popo: 'Popó', mixto: 'Pipí + Popó' };
-        const nombreColor = { mostaza: 'Mostaza', cafe: 'Café', verde: 'Verde', negro: 'Negro', rojo: 'Rojizo', gris: 'Blanco/gris' };
-        const nombreCons = { liquida: 'Aguada', cremosa: 'Cremosa', grumitos: 'Con grumitos', pastosa: 'Pastosa', dura: 'Bolitas duras' };
-        y = tabla(doc, y, ['Fecha', 'Hora', 'Tipo', 'Color', 'Consistencia', 'Notas'],
+        const nombre = en ? { pipi: 'Pee', popo: 'Poop', mixto: 'Pee + Poop' } : { pipi: 'Pipí', popo: 'Popó', mixto: 'Pipí + Popó' };
+        const nombreColor = en ? { mostaza: 'Mustard', cafe: 'Brown', verde: 'Green', negro: 'Black', rojo: 'Reddish', gris: 'White/gray' } : { mostaza: 'Mostaza', cafe: 'Café', verde: 'Verde', negro: 'Negro', rojo: 'Rojizo', gris: 'Blanco/gris' };
+        const nombreCons = en ? { liquida: 'Watery', cremosa: 'Creamy', grumitos: 'Seedy', pastosa: 'Pasty', dura: 'Hard pellets' } : { liquida: 'Aguada', cremosa: 'Cremosa', grumitos: 'Con grumitos', pastosa: 'Pastosa', dura: 'Bolitas duras' };
+        y = tabla(doc, y, (en ? ['Date', 'Time', 'Type', 'Color', 'Consistency', 'Notes'] : ['Fecha', 'Hora', 'Tipo', 'Color', 'Consistencia', 'Notas']),
           pan.map(p => [fmtFecha(p.hora), fmtHora(p.hora), nombre[p.tipo] || p.tipo,
             nombreColor[p.color] || '', nombreCons[p.consistencia] || '', p.notas || '']));
-      } else { doc.setFontSize(10); doc.text('Sin registros en este periodo.', 14, y + 6); y += 16; }
+      } else { doc.setFontSize(10); doc.text((en ? 'No entries in this period.' : 'Sin registros en este periodo.'), 14, y + 6); y += 16; }
     }
 
     /* ---- Sueño ---- */
     if (secciones.suenos) {
       const sue = d.suenos.filter(s => enRango(s.inicio) && s.fin).sort((a, b) => a.inicio.localeCompare(b.inicio));
-      y = encabezadoSeccion(doc, y, 'Sueño y vigilia');
+      y = encabezadoSeccion(doc, y, en ? 'Sleep & wake windows' : 'Sueño y vigilia');
       if (sue.length) {
         const soloSueno = sue.filter(s => s.tipo !== 'vigilia');
         const horasPorDia = dias.map(dia =>
@@ -171,29 +172,29 @@ const PDFResumen = (() => {
           type: 'bar',
           data: {
             labels: dias.map(fmtFecha),
-            datasets: [{ label: 'Horas de sueño por día', data: horasPorDia, backgroundColor: '#9b87e8', borderRadius: 8 }],
+            datasets: [{ label: en ? 'Hours of sleep per day' : 'Horas de sueño por día', data: horasPorDia, backgroundColor: '#9b87e8', borderRadius: 8 }],
           },
         });
         doc.addImage(img, 'JPEG', 14, y, 182, 91);
         y += 100;
-        const quien = { mama: (d.bebe.mama || 'Mamá'), papa: (d.bebe.papa || 'Papá'), ambos: 'Ambos' };
-        y = tabla(doc, y, ['Tipo', 'Inicio', 'Fin', 'Duración', 'Quién', 'Notas'],
+        const quien = { mama: (d.bebe.mama || (en ? 'Mom' : 'Mamá')), papa: (d.bebe.papa || (en ? 'Dad' : 'Papá')), ambos: en ? 'Both' : 'Ambos' };
+        y = tabla(doc, y, (en ? ['Type', 'Start', 'End', 'Duration', 'Who', 'Notes'] : ['Tipo', 'Inicio', 'Fin', 'Duración', 'Quién', 'Notas']),
           sue.map(s => {
             const min = Math.round((new Date(s.fin) - new Date(s.inicio)) / 60000);
             const notas = [
               s.notas,
               ...(s.bitacora || []).map(n => `${fmtHora(n.hora)}${n.autor ? ` [${quien[n.autor] || n.autor}]` : ''} ${n.texto}`),
             ].filter(Boolean).join(' · ');
-            return [s.tipo === 'vigilia' ? 'Vigilia' : 'Sueño',
+            return [s.tipo === 'vigilia' ? (en ? 'Wake window' : 'Vigilia') : (en ? 'Sleep' : 'Sueño'),
               fmtFechaHora(s.inicio), fmtFechaHora(s.fin), `${Math.floor(min / 60)}h ${min % 60}m`,
               quien[s.quien] || '', notas];
           }));
-      } else { doc.setFontSize(10); doc.text('Sin registros en este periodo.', 14, y + 6); y += 16; }
+      } else { doc.setFontSize(10); doc.text((en ? 'No entries in this period.' : 'Sin registros en este periodo.'), 14, y + 6); y += 16; }
     }
 
     /* ---- Condiciones médicas ---- */
     if (secciones.condiciones && d.condiciones.length) {
-      y = encabezadoSeccion(doc, y, 'Condiciones médicas');
+      y = encabezadoSeccion(doc, y, en ? 'Medical conditions' : 'Condiciones médicas');
       for (const c of d.condiciones) {
         doc.setFontSize(12);
         doc.setFont(undefined, 'bold');
@@ -221,8 +222,8 @@ const PDFResumen = (() => {
           y += 100;
         }
         if (meds.length) {
-          y = tabla(doc, y, ['Fecha y hora', `Valor${c.unidad ? ` (${c.unidad})` : ''}`, 'Nota'],
-            meds.map(m => [fmtFechaHora(m.fecha), (m.valor === null || m.valor === '') ? 'Pendiente' : m.valor, m.nota || '']));
+          y = tabla(doc, y, (en ? ['Date & time', `Value${c.unidad ? ` (${c.unidad})` : ''}`, 'Note'] : ['Fecha y hora', `Valor${c.unidad ? ` (${c.unidad})` : ''}`, 'Nota']),
+            meds.map(m => [fmtFechaHora(m.fecha), (m.valor === null || m.valor === '') ? (en ? 'Pending' : 'Pendiente') : m.valor, m.nota || '']));
         }
       }
     }
@@ -231,30 +232,30 @@ const PDFResumen = (() => {
     if (secciones.intervenciones) {
       const ints = d.intervenciones.filter(i => enRango(i.fecha)).sort((a, b) => a.fecha.localeCompare(b.fecha));
       if (ints.length) {
-        y = encabezadoSeccion(doc, y, 'Intervenciones y procedimientos');
-        y = tabla(doc, y, ['Fecha y hora', 'Intervención', 'Categoría', 'Notas'],
+        y = encabezadoSeccion(doc, y, en ? 'Procedures & interventions' : 'Intervenciones y procedimientos');
+        y = tabla(doc, y, (en ? ['Date & time', 'Procedure', 'Category', 'Notes'] : ['Fecha y hora', 'Intervención', 'Categoría', 'Notas']),
           ints.map(i => [fmtFechaHora(i.fecha), i.titulo, i.categoria || '', i.notas || '']));
       }
     }
 
     /* ---- Medicamentos ---- */
     if (secciones.medicamentos && d.medicamentos.length) {
-      y = encabezadoSeccion(doc, y, 'Medicamentos y tratamientos');
-      y = tabla(doc, y, ['Medicamento', 'Dosis', 'Frecuencia', 'Inicio', 'Estado', 'Notas'],
+      y = encabezadoSeccion(doc, y, en ? 'Medications & treatments' : 'Medicamentos y tratamientos');
+      y = tabla(doc, y, (en ? ['Medication', 'Dose', 'Frequency', 'Started', 'Status', 'Notes'] : ['Medicamento', 'Dosis', 'Frecuencia', 'Inicio', 'Estado', 'Notas']),
         d.medicamentos.map(m => [m.nombre, m.dosis || '', m.frecuencia || '',
-          m.inicio ? fmtFecha(m.inicio) : '', m.activo ? 'Activo' : 'Terminado', m.notas || '']));
+          m.inicio ? fmtFecha(m.inicio) : '', m.activo ? (en ? 'Active' : 'Activo') : (en ? 'Finished' : 'Terminado'), m.notas || '']));
     }
 
     /* ---- Crecimiento ---- */
     if (secciones.crecimiento && d.crecimiento.length) {
       const cre = [...d.crecimiento].sort((a, b) => a.fecha.localeCompare(b.fecha));
-      y = encabezadoSeccion(doc, y, 'Crecimiento');
+      y = encabezadoSeccion(doc, y, en ? 'Growth' : 'Crecimiento');
       const img = await chartImg({
         type: 'line',
         data: {
           labels: cre.map(c => fmtFecha(c.fecha)),
           datasets: [{
-            label: 'Peso (kg)', data: cre.map(c => c.pesoKg || null),
+            label: en ? 'Weight (kg)' : 'Peso (kg)', data: cre.map(c => c.pesoKg || null),
             borderColor: '#4cc38a', backgroundColor: '#4cc38a33', fill: true, tension: .35, pointRadius: 5,
           }],
         },
@@ -262,7 +263,7 @@ const PDFResumen = (() => {
       if (y > 180) { doc.addPage(); y = 20; }
       doc.addImage(img, 'JPEG', 14, y, 182, 91);
       y += 100;
-      y = tabla(doc, y, ['Fecha', 'Peso (kg)', 'Talla (cm)', 'P. cefálico (cm)'],
+      y = tabla(doc, y, (en ? ['Date', 'Weight (kg)', 'Height (cm)', 'Head circ. (cm)'] : ['Fecha', 'Peso (kg)', 'Talla (cm)', 'P. cefálico (cm)']),
         cre.map(c => [fmtFecha(c.fecha), c.pesoKg || '—', c.tallaCm || '—', c.perimetroCm || '—']));
     }
 
@@ -272,10 +273,10 @@ const PDFResumen = (() => {
       doc.setPage(i);
       doc.setFontSize(8);
       doc.setTextColor(170, 150, 160);
-      doc.text(`Diario de ${d.bebe.nombre || 'Maya'} · generado el ${new Date().toLocaleString(I18N.loc())} · página ${i} de ${pages}`, 14, 290);
+      doc.text((en ? `${d.bebe.nombre || 'Baby'}'s journal · generated ${new Date().toLocaleString(I18N.loc())} · page ${i} of ${pages}` : `Diario de ${d.bebe.nombre || 'Maya'} · generado el ${new Date().toLocaleString(I18N.loc())} · página ${i} de ${pages}`), 14, 290);
     }
 
-    doc.save(`Resumen-${d.bebe.nombre || 'Maya'}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    doc.save(`${en ? 'Report' : 'Resumen'}-${d.bebe.nombre || 'Maya'}-${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
   return { generar };

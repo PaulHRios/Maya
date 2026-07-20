@@ -24,6 +24,7 @@ const EPDS = (() => {
     { texto: 'He pensado en hacerme daño a mí misma', ops: [['Sí, bastante a menudo', 3], ['A veces', 2], ['Casi nunca', 1], ['No, nunca', 0]] },
   ];
 
+
   function resultados() {
     try { return JSON.parse(localStorage.getItem(LS_RESULTADOS)) || []; }
     catch { return []; }
@@ -68,6 +69,28 @@ const EPDS = (() => {
     { emoji: '💬', texto: 'SAPTEL, apoyo emocional 24/7: 55 5259 8121', url: 'tel:5552598121' },
     { emoji: '🌎', texto: 'Postpartum Support International (en español)', url: 'https://www.postpartum.net/en-espanol/' },
   ];
+
+  /* version oficial en ingles (Cox, Holden & Sagovsky, 1987), aplicada al cargar */
+  if (typeof I18N !== 'undefined' && I18N.lang === 'en') {
+    const Q = [
+      ['I have been able to laugh and see the funny side of things', [['As much as I always could', 0], ['Not quite so much now', 1], ['Definitely not so much now', 2], ['Not at all', 3]]],
+      ['I have looked forward with enjoyment to things', [['As much as I ever did', 0], ['Rather less than I used to', 1], ['Definitely less than I used to', 2], ['Hardly at all', 3]]],
+      ['I have blamed myself unnecessarily when things went wrong', [['Yes, most of the time', 3], ['Yes, some of the time', 2], ['Not very often', 1], ['No, never', 0]]],
+      ['I have been anxious or worried for no good reason', [['No, not at all', 0], ['Hardly ever', 1], ['Yes, sometimes', 2], ['Yes, very often', 3]]],
+      ['I have felt scared or panicky for no very good reason', [['Yes, quite a lot', 3], ['Yes, sometimes', 2], ['No, not much', 1], ['No, not at all', 0]]],
+      ['Things have been getting on top of me', [['Yes, most of the time I have not been able to cope at all', 3], ['Yes, sometimes I have not been coping as well as usual', 2], ['No, most of the time I have coped quite well', 1], ['No, I have been coping as well as ever', 0]]],
+      ['I have been so unhappy that I have had difficulty sleeping', [['Yes, most of the time', 3], ['Yes, sometimes', 2], ['Not very often', 1], ['No, not at all', 0]]],
+      ['I have felt sad or miserable', [['Yes, most of the time', 3], ['Yes, quite often', 2], ['Not very often', 1], ['No, not at all', 0]]],
+      ['I have been so unhappy that I have been crying', [['Yes, most of the time', 3], ['Yes, quite often', 2], ['Only occasionally', 1], ['No, never', 0]]],
+      ['The thought of harming myself has occurred to me', [['Yes, quite often', 3], ['Sometimes', 2], ['Hardly ever', 1], ['Never', 0]]],
+    ];
+    PREGUNTAS.forEach((p, i) => { p.texto = Q[i][0]; p.ops = Q[i][1]; });
+    RECURSOS[0].texto = 'Postpartum depression specialists near you';
+    RECURSOS[1].texto = 'Linea de la Vida (Mexico, 24/7, free): 800 911 2000';
+    RECURSOS[2].texto = 'SAPTEL emotional support 24/7: 55 5259 8121';
+    RECURSOS[3].texto = 'Postpartum Support International: 1-800-944-4773 (EN/ES)';
+  }
+
 
   return { PREGUNTAS, resultados, guardarResultado, tocaChequeo, posponer, interpretar, RECURSOS };
 })();

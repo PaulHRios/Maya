@@ -15,18 +15,20 @@
   function fmtDia(iso) {
     const d = new Date(iso), hoy = new Date();
     const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
-    if (d.toDateString() === hoy.toDateString()) return 'Hoy';
-    if (d.toDateString() === ayer.toDateString()) return 'Ayer';
+    const en = I18N.lang === 'en';
+    if (d.toDateString() === hoy.toDateString()) return en ? 'Today' : 'Hoy';
+    if (d.toDateString() === ayer.toDateString()) return en ? 'Yesterday' : 'Ayer';
     return d.toLocaleDateString(I18N.loc(), { weekday: 'long', day: 'numeric', month: 'short' });
   }
 
   function hace(iso) {
     const min = Math.floor((Date.now() - new Date(iso)) / 60000);
-    if (min < 1) return 'ahora mismo';
-    if (min < 60) return `hace ${min} min`;
+    const en = I18N.lang === 'en';
+    if (min < 1) return en ? 'just now' : 'ahora mismo';
+    if (min < 60) return en ? `${min} min ago` : `hace ${min} min`;
     const h = Math.floor(min / 60);
-    if (h < 24) return `hace ${h} h ${min % 60} min`;
-    return `hace ${Math.floor(h / 24)} día(s)`;
+    if (h < 24) return en ? `${h} h ${min % 60} min ago` : `hace ${h} h ${min % 60} min`;
+    return en ? `${Math.floor(h / 24)} day(s) ago` : `hace ${Math.floor(h / 24)} día(s)`;
   }
 
   function fmtDur(seg) {
@@ -168,7 +170,19 @@
       return partes.join(' · ');
     };
 
+    const h = new Date().getHours();
+    const enH = I18N.lang === 'en';
+    const saludo = h < 6 ? (enH ? 'Quiet night' : 'Madrugada tranquila') : h < 12 ? (enH ? 'Good morning' : 'Buenos días') : h < 19 ? (enH ? 'Good afternoon' : 'Buenas tardes') : (enH ? 'Good evening' : 'Buenas noches');
+    const emojiH = h < 6 ? '🌙' : h < 12 ? '☀️' : h < 19 ? '🌤️' : '✨';
+    const quienSaludo = nombreQuien(Store.getDispositivo());
     main.innerHTML = `
+      <div class="hero-inicio">
+        <span class="hi-emoji">${emojiH}</span>
+        <div>
+          <div class="hi-saludo">${saludo}${quienSaludo ? `, ${esc(quienSaludo)}` : ''}</div>
+          <div class="hi-frase">${enH ? `Here's how ${esc(d.bebe.nombre || 'baby')}'s day is going` : `Así va el día de ${esc(d.bebe.nombre || 'la bebé')}`}</div>
+        </div>
+      </div>
       ${bannerFotoSemanal()}
       <div class="quick-actions">
         <button class="quick-btn" data-accion="toma-izq"><span>🤱</span>Pecho izq.</button>
@@ -437,13 +451,13 @@
 
   /* ---------- ventanas de despierto por edad (en minutos) ---------- */
   const VENTANAS_SUENO = [
-    { desde: 0, hasta: 4, min: 45, max: 60, siestas: '4–6 siestas · 14–17 h de sueño al día' },
-    { desde: 4, hasta: 9, min: 45, max: 75, siestas: '4–5 siestas · 14–17 h al día' },
-    { desde: 9, hasta: 13, min: 60, max: 90, siestas: '4–5 siestas · 14–16 h al día' },
-    { desde: 13, hasta: 17, min: 75, max: 120, siestas: '3–4 siestas · 13–16 h al día' },
-    { desde: 17, hasta: 26, min: 90, max: 150, siestas: '3–4 siestas · 12–15 h al día' },
-    { desde: 26, hasta: 39, min: 120, max: 180, siestas: '2–3 siestas · 12–15 h al día' },
-    { desde: 39, hasta: 53, min: 150, max: 210, siestas: '2 siestas · 12–14 h al día' },
+    { desde: 0, hasta: 4, min: 45, max: 60, siestas: I18N.lang === 'en' ? '4–6 naps · 14–17 h de sueño per day' : '4–6 siestas · 14–17 h de sueño al día' },
+    { desde: 4, hasta: 9, min: 45, max: 75, siestas: I18N.lang === 'en' ? '4–5 naps · 14–17 h per day' : '4–5 siestas · 14–17 h al día' },
+    { desde: 9, hasta: 13, min: 60, max: 90, siestas: I18N.lang === 'en' ? '4–5 naps · 14–16 h per day' : '4–5 siestas · 14–16 h al día' },
+    { desde: 13, hasta: 17, min: 75, max: 120, siestas: I18N.lang === 'en' ? '3–4 naps · 13–16 h per day' : '3–4 siestas · 13–16 h al día' },
+    { desde: 17, hasta: 26, min: 90, max: 150, siestas: I18N.lang === 'en' ? '3–4 naps · 12–15 h per day' : '3–4 siestas · 12–15 h al día' },
+    { desde: 26, hasta: 39, min: 120, max: 180, siestas: I18N.lang === 'en' ? '2–3 naps · 12–15 h per day' : '2–3 siestas · 12–15 h al día' },
+    { desde: 39, hasta: 53, min: 150, max: 210, siestas: I18N.lang === 'en' ? '2 naps · 12–14 h per day' : '2 siestas · 12–14 h al día' },
   ];
 
   function ventanaEdad() {
@@ -471,23 +485,31 @@
       </div>`;
     const despiertaMin = Math.floor((Date.now() - new Date(ult.fin)) / 60000);
     const pct = Math.min(100, Math.round((despiertaMin / v.max) * 100));
-    let color = '#4cc38a', estado = 'Recién recargada ✨';
-    if (despiertaMin >= v.max) { color = '#e25555'; estado = '¡Ventana pasada! Puede sobre-cansarse y costarle más dormir'; }
-    else if (despiertaMin >= v.min) { color = '#f5b54a'; estado = 'En su punto: es buen momento para dormirla 😴'; }
-    else if (pct >= 70) { color = '#f5b54a'; estado = 'Se acerca su hora — vayan bajando el ritmo'; }
+    let color = '#4cc38a', estado = I18N.lang === 'en' ? 'Freshly recharged ✨' : 'Recién recargada ✨';
+    if (despiertaMin >= v.max) { color = '#e25555'; estado = I18N.lang === 'en' ? 'Window passed! She may get overtired and fight sleep' : '¡Ventana pasada! Puede sobre-cansarse y costarle más dormir'; }
+    else if (despiertaMin >= v.min) { color = '#f5b54a'; estado = I18N.lang === 'en' ? 'Sweet spot: great moment to put her down 😴' : 'En su punto: es buen momento para dormirla 😴'; }
+    else if (pct >= 70) { color = '#f5b54a'; estado = I18N.lang === 'en' ? 'Almost time — start winding down' : 'Se acerca su hora — vayan bajando el ritmo'; }
     return `
       <div class="card ventana-card">
         <h2>⏳ Ventana de despierta</h2>
-        <div style="font-size:22px;font-weight:800">${Math.floor(despiertaMin / 60) ? `${Math.floor(despiertaMin / 60)} h ` : ''}${despiertaMin % 60} min <small style="font-size:13px;color:var(--text-2);font-weight:600">despierta</small></div>
+        <div style="font-size:22px;font-weight:800">${Math.floor(despiertaMin / 60) ? `${Math.floor(despiertaMin / 60)} h ` : ''}${despiertaMin % 60} min <small style="font-size:13px;color:var(--text-2);font-weight:600">${I18N.lang === 'en' ? 'awake' : 'despierta'}</small></div>
         <div class="ventana-barra"><div class="vb-fill" style="width:${pct}%;background-color:${color}"></div></div>
         <div class="ventana-meta"><span>0</span><span>${v.min} min</span><span>${v.max} min</span></div>
         <p style="font-size:13px;font-weight:700;margin-top:6px;color:${color}">${estado}</p>
-        <p style="font-size:12px;color:var(--text-2);margin-top:4px">A su edad: ${v.min}–${v.max} min por ventana · ${v.siestas}</p>
+        <p style="font-size:12px;color:var(--text-2);margin-top:4px">${I18N.lang === 'en' ? `At her age: ${v.min}–${v.max} min per window · ${v.siestas}` : `A su edad: ${v.min}–${v.max} min por ventana · ${v.siestas}`}</p>
       </div>`;
   }
 
   /* ---------- rutina de dormir ---------- */
-  const RUTINA_BASE = () => [
+  const RUTINA_BASE = () => I18N.lang === 'en' ? [
+    { id: 'r1', emoji: '🛁', titulo: 'Warm bath', min: 10 },
+    { id: 'r2', emoji: '👐', titulo: 'Lotion massage', min: 5 },
+    { id: 'r3', emoji: '👶', titulo: 'Diaper & pajamas', min: 5 },
+    { id: 'r4', emoji: '🍼', titulo: 'Last feed (lights low)', min: 15 },
+    { id: 'r5', emoji: '📖', titulo: 'Quiet story or song', min: 5 },
+    { id: 'r6', emoji: '🌙', titulo: 'Lights off + white noise', min: 1 },
+    { id: 'r7', emoji: '😴', titulo: 'Into the crib drowsy but awake', min: 1 },
+  ] : [
     { id: 'r1', emoji: '🛁', titulo: 'Baño tibio', min: 10 },
     { id: 'r2', emoji: '👐', titulo: 'Masaje con crema', min: 5 },
     { id: 'r3', emoji: '👶', titulo: 'Pañal y pijama', min: 5 },
@@ -659,15 +681,15 @@
     });
     if (inicios.length >= 3) {
       const rango = Math.max(...inicios) - Math.min(...inicios);
-      if (rango > 90) tips.push({ emoji: '🕗', texto: `La hora de dormirla varió ${Math.round(rango / 60 * 10) / 10} h esta semana. Una hora fija (± 30 min) es de lo que más ayuda a dormir corrido${d.rutina && d.rutina.hora ? ` — su objetivo es ${d.rutina.hora}` : ''}.` });
-      else tips.push({ emoji: '🏅', texto: 'La hora de acostarla ha sido muy constante esta semana — eso construye el sueño nocturno. ¡Sigan así!' });
+      if (rango > 90) tips.push({ emoji: '🕗', texto: I18N.lang === 'en' ? `Bedtime varied ${Math.round(rango / 60 * 10) / 10} h this week. A fixed hour (±30 min) is one of the biggest sleep boosters${d.rutina && d.rutina.hora ? ` — your target is ${d.rutina.hora}` : ''}.` : `La hora de dormirla varió ${Math.round(rango / 60 * 10) / 10} h esta semana. Una hora fija (± 30 min) es de lo que más ayuda a dormir corrido${d.rutina && d.rutina.hora ? ` — su objetivo es ${d.rutina.hora}` : ''}.` });
+      else tips.push({ emoji: '🏅', texto: I18N.lang === 'en' ? 'Bedtime has been very consistent this week — that is what builds long night sleep. Keep it up!' : 'La hora de acostarla ha sido muy constante esta semana — eso construye el sueño nocturno. ¡Sigan así!' });
     }
 
     // mejor racha nocturna
     const rachas = noches.map(s => new Date(s.fin) - new Date(s.inicio));
     if (rachas.length) {
       const mejor = Math.max(...rachas);
-      tips.push({ emoji: '🌙', texto: `Su mejor racha nocturna esta semana: ${fmtDurLarga(mejor)}. Ese número irá creciendo solo con la rutina constante.` });
+      tips.push({ emoji: '🌙', texto: I18N.lang === 'en' ? `Her best night stretch this week: ${fmtDurLarga(mejor)}. That number grows on its own with a steady routine.` : `Su mejor racha nocturna esta semana: ${fmtDurLarga(mejor)}. Ese número irá creciendo solo con la rutina constante.` });
     }
 
     // confusión día/noche (primeras 8 semanas)
@@ -678,12 +700,19 @@
       const deNoche = en7.filter(s => { const h = new Date(s.inicio).getHours(); return h >= 19 || h < 8; })
         .reduce((t, s) => t + (new Date(s.fin) - new Date(s.inicio)), 0);
       if (deDia > deNoche * 1.3 && en7.length >= 5) {
-        tips.push({ emoji: '☀️', texto: 'Está durmiendo más de día que de noche. Para voltearlo: de día luz y ruido normal en sus siestas; de noche oscuridad total, voz bajita y tomas aburridas (sin jugar ni prender luces).' });
+        tips.push({ emoji: '☀️', texto: I18N.lang === 'en' ? 'She is sleeping more by day than by night. To flip it: daytime naps with light and normal noise; nights pitch dark, whisper voice and boring feeds.' : 'Está durmiendo más de día que de noche. Para voltearlo: de día luz y ruido normal en sus siestas; de noche oscuridad total, voz bajita y tomas aburridas (sin jugar ni prender luces).' });
       }
     }
 
     // generales que rotan por día
-    const POOL = [
+    const POOL = I18N.lang === 'en' ? [
+      { emoji: '😴', texto: 'Put her down drowsy but awake: she learns to fall asleep in her crib and to link cycles alone at night.' },
+      { emoji: '🌑', texto: 'A really dark room and constant white noise all night: recreates the womb and masks house sounds.' },
+      { emoji: '🍼', texto: 'Night feeds in boring mode: minimal light, no chatting or play, diaper change only if needed. Eat and back to the crib.' },
+      { emoji: '🌡️', texto: 'Cool room (68–72 °F / 20–22 °C) and a sleep sack instead of loose blankets — safer and she sleeps better.' },
+      { emoji: '⏳', texto: 'Respecting wake windows prevents overtiredness: an overtired baby fights sleep harder, not less.' },
+      { emoji: '🧺', texto: 'Keep the last nap away from bedtime: leave at least one full wake window before the routine.' },
+    ] : [
       { emoji: '😴', texto: 'Acuéstenla somnolienta pero aún despierta: así aprende a dormirse sola en su cuna, y a hilar ciclos sin ayuda a media noche.' },
       { emoji: '🌑', texto: 'Cuarto bien oscuro y ruido blanco constante toda la noche: recrea el útero y tapa los ruidos de la casa.' },
       { emoji: '🍼', texto: 'Tomas nocturnas en modo aburrido: luz mínima, sin plática ni juego, cambio de pañal solo si hace falta. Comer y de vuelta a la cuna.' },
@@ -845,10 +874,10 @@
           <option value="vigilia" ${tipo0 === 'vigilia' ? 'selected' : ''}>👁️ Vigilia (despierta)</option>
         </select>
       </div>
-      <div class="form-group"><label>Inicio</label>
+      <div class="form-group"><label>Comenzó</label>
         <input type="datetime-local" id="f-inicio" value="${aInputLocal(existente ? existente.inicio : null)}">
       </div>
-      <div class="form-group"><label>Fin</label>
+      <div class="form-group"><label>Terminó</label>
         <input type="datetime-local" id="f-fin" value="${aInputLocal(existente ? existente.fin : null)}">
       </div>
       <div id="f-vigilia-extra" class="${tipo0 === 'vigilia' ? '' : 'hidden'}">
@@ -1057,6 +1086,28 @@
       };
       img.onerror = () => res(null);
       img.src = dataUrl;
+    });
+  }
+
+
+  /* traduccion EN de constantes de la interfaz (el cambio de idioma recarga) */
+  if (typeof I18N !== 'undefined' && I18N.lang === 'en') {
+    COLORES_POPO.forEach(c => c.nombre = ({ mostaza: 'Mustard', cafe: 'Brown', verde: 'Green', negro: 'Black', rojo: 'Reddish', gris: 'White/gray' })[c.id] || c.nombre);
+    CONSISTENCIAS.forEach(c => c.nombre = ({ liquida: 'Watery', cremosa: 'Creamy', grumitos: 'Seedy', pastosa: 'Pasty', dura: 'Hard pellets' })[c.id] || c.nombre);
+    Object.assign(LECTURA_COLOR, {
+      mostaza: 'Mustard: the classic for breastfed babies. Normal and healthy. ✅',
+      cafe: 'Brown: normal, very common with formula. ✅',
+      verde: 'Green: usually fine (common with formula or fast transit). If constant or with mucus, mention it at the next visit.',
+      negro: 'Black: normal the first days (meconium). If it shows up after week one, tell the pediatrician.',
+      rojo: 'Reddish tones can mean blood: worth telling the pediatrician soon. ⚠️',
+      gris: 'White or gray is uncommon and deserves a call to the pediatrician. ⚠️',
+    });
+    Object.assign(LECTURA_CONSISTENCIA, {
+      liquida: 'Watery: one now and then is fine; several very liquid in a row may be diarrhea — watch feeding and wet diapers.',
+      cremosa: 'Creamy: the typical, healthy consistency.',
+      grumitos: 'Seedy ("little curds"): the breastfeeding classic, totally normal.',
+      pastosa: 'Pasty: normal, common with formula.',
+      dura: 'Hard, dry pellets suggest constipation; if it repeats, tell the pediatrician.',
     });
   }
 
@@ -1592,9 +1643,9 @@
   // nivel en tercios respecto a la meta
   function nivelBanco(refri, objetivo) {
     const pct = objetivo ? refri / objetivo : 0;
-    if (pct >= 2 / 3) return { color: '#4cc38a', texto: 'Reserva sana 💚' };
-    if (pct >= 1 / 3) return { color: '#f5b54a', texto: 'Va a la mitad 💛' };
-    return { color: '#e25555', texto: refri <= 0 ? 'Sin leche lista ❤️' : 'Queda poquita ❤️' };
+    if (pct >= 2 / 3) return { color: '#4cc38a', texto: I18N.lang === 'en' ? 'Healthy stash 💚' : 'Reserva sana 💚' };
+    if (pct >= 1 / 3) return { color: '#f5b54a', texto: I18N.lang === 'en' ? 'Halfway there 💛' : 'Va a la mitad 💛' };
+    return { color: '#e25555', texto: refri <= 0 ? (I18N.lang === 'en' ? 'No milk ready ❤️' : 'Sin leche lista ❤️') : (I18N.lang === 'en' ? 'Running low ❤️' : 'Queda poquita ❤️') };
   }
 
   function tanqueHTML(refri, objetivo, grande) {
@@ -1636,7 +1687,14 @@
     }
   }
 
-  const NOMBRE_MOV = {
+  const NOMBRE_MOV = I18N.lang === 'en' ? {
+    extraccion: m => ({ emoji: '🥛', titulo: `Pumped → ${m.lugar === 'congelador' ? 'freezer' : 'fridge'}` }),
+    descongelar: () => ({ emoji: '🧊', titulo: 'Thawed → fridge' }),
+    congelar: () => ({ emoji: '❄️', titulo: 'Fridge → freezer' }),
+    consumo: () => ({ emoji: '🍼', titulo: 'Expressed-milk feed' }),
+    descarte: m => ({ emoji: '🗑️', titulo: `Discarded (${m.lugar === 'congelador' ? 'freezer' : 'fridge'})` }),
+    ajuste: m => ({ emoji: '✏️', titulo: `${m.lugar === 'congelador' ? 'Freezer' : 'Fridge'} correction` }),
+  } : {
     extraccion: m => ({ emoji: '🥛', titulo: `Extracción → ${m.lugar === 'congelador' ? 'congelador' : 'refri'}` }),
     descongelar: () => ({ emoji: '🧊', titulo: 'Descongelada → refri' }),
     congelar: () => ({ emoji: '❄️', titulo: 'Del refri → congelador' }),
@@ -1696,6 +1754,23 @@
       fases: [{ nombre: 'Extraer', min: 10 }],
     },
   };
+
+  if (typeof I18N !== 'undefined' && I18N.lang === 'en') {
+    const M = {
+      normal: ['Simple', 'Free-form: you decide when to stop. 15-20 min recommended.'],
+      medela: ['Medela 2-phase', "Your pump's cycle: 2 min stimulation (letdown) and 13 min expression. I'll tell you when to switch."],
+      stanford: ['Hands-on', 'Stanford method: massage before, compressions during and a hand-express finish. Up to 48% more milk.'],
+      power: ['Power pumping', "To boost supply: mimics cluster feeding. Ideal once a day for 3-7 days. Takes 1 hour."],
+      powerx: ['Power express', 'The short power-pumping version when there is no full hour: 40 min.'],
+      postoma: ['After nursing', '10 min right after a feed: sends the "make more" signal without taking milk from the baby.'],
+    };
+    const F = { 'Extraer': 'Pump', 'Descansar': 'Rest', 'Estimulación (modo gotitas)': 'Stimulation (letdown mode)', 'Extracción (modo succión)': 'Expression (suction mode)', 'Masaje en ambos pechos': 'Massage both breasts', 'Extraer con compresiones': 'Pump with compressions', 'Remate con extracción manual': 'Hand-express finish' };
+    Object.entries(MODOS_EXTRACCION).forEach(([id, m]) => {
+      if (M[id]) { m.nombre = M[id][0]; m.desc = M[id][1]; }
+      (m.fases || []).forEach(f => { if (F[f.nombre]) f.nombre = F[f.nombre]; });
+    });
+  }
+
   const modoExt = id => MODOS_EXTRACCION[id] || MODOS_EXTRACCION.normal;
   const duracionModo = m => (m.fases || []).reduce((s, f) => s + f.min, 0);
 
@@ -1858,27 +1933,43 @@
     { emoji: '🔄', texto: 'Si la bomba deja de sacar pero aún sientes leche, vuelve 1 minuto al modo estimulación de tu Medela: provoca una segunda bajada.' },
   ];
 
+
+  if (typeof I18N !== 'undefined' && I18N.lang === 'en') {
+    TIPS_GENERALES.length = 0;
+    TIPS_GENERALES.push(
+      { emoji: '📏', texto: 'Check your Medela flange size: the nipple should move freely without pulling areola. A wrong size can really lower output (and hurt).' },
+      { emoji: '🎚️', texto: 'Use the highest vacuum that does NOT hurt: step up until uncomfortable, then back one. Pain = less milk, not more.' },
+      { emoji: '🤲', texto: 'Hands-free pump superpower: gentle breast compressions while pumping get noticeably more out (the hands-on method in the timer).' },
+      { emoji: '💆', texto: 'Massage and warm compresses 2 minutes before: letdown comes sooner and more milk flows.' },
+      { emoji: '👶', texto: 'Seeing, smelling or holding your baby (or her photo in the app 😉) while pumping releases oxytocin and helps letdown.' },
+      { emoji: '💧', texto: 'Hydration and full meals: milk is ~90% water. Keep a glass next to you every session.' },
+      { emoji: '🍼', texto: 'The "After nursing" timer method (10 min post-feed) sends the "make more" signal without shorting the baby.' },
+      { emoji: '🧘', texto: 'Stress blocks oxytocin: drop the shoulders, breathe, and don\'t stare at the bottle.' },
+      { emoji: '🔄', texto: 'If flow stops but you still feel milk, switch back to stimulation mode for 1 minute: it can trigger a second letdown.' },
+    );
+  }
+
   function tipsProduccion(s) {
     const tips = [];
     // día flojo: primero el ánimo, luego la técnica
     const sesionesHoy = s.exts.filter(m => fechaLocal(m.fecha) === fechaLocal()).length;
     if (s.promedio > 30 && sesionesHoy >= 2 && s.hoy < s.promedio * 0.7) {
-      tips.push({ emoji: '💗', texto: `Hoy va más bajito que tu promedio y está bien — la producción varía con el sueño, el estrés y las hormonas, no con cuánto te esfuerzas. Hidrátate, respira hondo antes de la siguiente sesión y, si puedes, tómate un respiro de 10 minutos. Mañana es otro día. 🤍` });
+      tips.push({ emoji: '💗', texto: I18N.lang === 'en' ? `Today is running below your average — and that's okay. Supply moves with sleep, stress and hormones, not effort. Hydrate, breathe before the next session, and take a 10-minute break if you can. Tomorrow is a new day. 🤍` : `Hoy va más bajito que tu promedio y está bien — la producción varía con el sueño, el estrés y las hormonas, no con cuánto te esfuerzas. Hidrátate, respira hondo antes de la siguiente sesión y, si puedes, tómate un respiro de 10 minutos. Mañana es otro día. 🤍` });
     }
     if (s.tendencia !== null && s.tendencia <= -10) {
-      tips.push({ emoji: '⚡', texto: `La producción bajó ~${Math.abs(s.tendencia)}% estos días. Prueba el Power pumping (o el exprés si no hay una hora) 1 vez al día durante 3–7 días — está en el timer de arriba y te guía con las fases.` });
+      tips.push({ emoji: '⚡', texto: I18N.lang === 'en' ? `Supply dipped ~${Math.abs(s.tendencia)}% these days. Try Power pumping (or the express version) once a day for 3–7 days — it's in the timer above and guides the phases.` : `La producción bajó ~${Math.abs(s.tendencia)}% estos días. Prueba el Power pumping (o el exprés si no hay una hora) 1 vez al día durante 3–7 días — está en el timer de arriba y te guía con las fases.` });
     }
     if (s.sesionesPorDia && s.sesionesPorDia < 4) {
-      tips.push({ emoji: '🔁', texto: `Van ~${s.sesionesPorDia} extracciones por día. La producción responde a la frecuencia más que a la duración: acercarse a 6–8 sesiones cortas al día "ordena" producir más.` });
+      tips.push({ emoji: '🔁', texto: I18N.lang === 'en' ? `You're at ~${s.sesionesPorDia} sessions a day. Supply answers frequency more than duration: getting to 6–8 short sessions a day "orders" more milk.` : `Van ~${s.sesionesPorDia} extracciones por día. La producción responde a la frecuencia más que a la duración: acercarse a 6–8 sesiones cortas al día "ordena" producir más.` });
     }
     if (!s.madrugada) {
-      tips.push({ emoji: '🌙', texto: 'Una extracción entre 2 y 5 a.m. aprovecha el pico de prolactina — es la hora que más estimula la producción (y como andan despiertos en las vigilias… 😅).' });
+      tips.push({ emoji: '🌙', texto: I18N.lang === 'en' ? 'One session between 2 and 5 a.m. rides the prolactin peak — the most supply-boosting hour there is (and you\'re up anyway… 😅).' : 'Una extracción entre 2 y 5 a.m. aprovecha el pico de prolactina — es la hora que más estimula la producción (y como andan despiertos en las vigilias… 😅).' });
     }
     if (s.durProm !== null && s.durProm < 12) {
-      tips.push({ emoji: '⏱️', texto: `Tus sesiones promedian ${s.durProm} min. Apunta a 15–20 min y sigue 2–5 min después de la última gota: el vaciado completo es la señal más fuerte para producir.` });
+      tips.push({ emoji: '⏱️', texto: I18N.lang === 'en' ? `Your sessions average ${s.durProm} min. Aim for 15–20 and keep going 2–5 min after the last drop: full emptying is the strongest signal.` : `Tus sesiones promedian ${s.durProm} min. Apunta a 15–20 min y sigue 2–5 min después de la última gota: el vaciado completo es la señal más fuerte para producir.` });
     }
     if (s.tendencia !== null && s.tendencia >= 10) {
-      tips.push({ emoji: '📈', texto: `¡La producción va subiendo ~${s.tendencia}%! Lo que están haciendo funciona — mantengan la misma rutina de horarios.` });
+      tips.push({ emoji: '📈', texto: I18N.lang === 'en' ? `Supply is climbing ~${s.tendencia}%! Whatever you're doing is working — keep the same schedule.` : `¡La producción va subiendo ~${s.tendencia}%! Lo que están haciendo funciona — mantengan la misma rutina de horarios.` });
     }
     // completar hasta 3 con tips generales, rotando por día
     const dia = Math.floor(Date.now() / 86400000);
@@ -1907,7 +1998,7 @@
           <div style="font-size:13px;color:var(--text-2);font-weight:600">listos para calentar y usar</div>
           <span class="nivel-chip" style="background:${nivel.color}">${nivel.texto}</span>
           <div style="font-size:12px;color:var(--text-2);margin-top:8px">
-            Meta sugerida: <b>${objetivo} ml</b> — unos 2 días de lo que suele tomar en biberón.
+            ${I18N.lang === 'en' ? `Suggested goal: <b>${objetivo} ml</b> — about 2 days of her usual bottle intake.` : `Meta sugerida: <b>${objetivo} ml</b> — unos 2 días de lo que suele tomar en biberón.`}
           </div>
         </div>
       </div>
@@ -1936,7 +2027,7 @@
 
       <div class="tips-card">
         <h3>🤖 Entrenadora de producción</h3>
-        <div class="tc-resumen">${s.exts.length ? `${s.sesionesPorDia} sesiones/día · promedio ${s.promedio} ml/día${s.durProm ? ` · ${s.durProm} min por sesión` : ''}${s.tendencia !== null ? ` · tendencia ${s.tendencia > 0 ? '+' : ''}${s.tendencia}%` : ''}` : 'Registra tus primeras extracciones para recibir consejos a tu medida.'}</div>
+        <div class="tc-resumen">${s.exts.length ? (I18N.lang === 'en' ? `${s.sesionesPorDia} sessions/day · avg ${s.promedio} ml/day${s.durProm ? ` · ${s.durProm} min/session` : ''}${s.tendencia !== null ? ` · trend ${s.tendencia > 0 ? '+' : ''}${s.tendencia}%` : ''}` : `${s.sesionesPorDia} sesiones/día · promedio ${s.promedio} ml/día${s.durProm ? ` · ${s.durProm} min por sesión` : ''}${s.tendencia !== null ? ` · tendencia ${s.tendencia > 0 ? '+' : ''}${s.tendencia}%` : ''}`) : (I18N.lang === 'en' ? 'Log your first pumping sessions to get tailored coaching.' : 'Registra tus primeras extracciones para recibir consejos a tu medida.')}</div>
         ${tips.map(t => `<div class="tip-item"><span class="t-emoji">${t.emoji}</span><span>${t.texto}</span></div>`).join('')}
         <p class="disclaimer" style="margin-top:8px">Consejos generales de lactancia; una asesora certificada siempre es la mejor guía.</p>
       </div>
@@ -2936,7 +3027,7 @@
       d.bebe.actualizado = new Date().toISOString();
       Store.setDispositivo($('#a-dispositivo').value);
       const idiomaSel = $('#a-idioma');
-      if (idiomaSel && idiomaSel.value !== I18N.lang) { I18N.set(idiomaSel.value); vistaAnterior = ''; }
+      if (idiomaSel && idiomaSel.value !== I18N.lang) { I18N.set(idiomaSel.value); setTimeout(() => location.reload(), 400); }
       Store.saveLocal();
       toast('Guardado 💗');
       actualizarHeader();
@@ -3257,9 +3348,8 @@
 
   $('#btn-idioma').onclick = () => {
     I18N.set(I18N.lang === 'en' ? 'es' : 'en');
-    toast(I18N.lang === 'en' ? 'English 🌐' : 'Español 🌐');
-    vistaAnterior = ''; // forzar re-render completo con transición
-    render();
+    // recargar reconstruye toda la app (textos, datos y gráficas) en el idioma nuevo
+    location.reload();
   };
 
   $('#btn-settings').onclick = () => {
@@ -3575,10 +3665,10 @@
 
   /* ---------- temas de color ---------- */
   const TEMAS = [
-    { id: '', nombre: 'Original', emoji: '💗', colores: ['#fff5f8', '#f06a9b', '#ffffff'] },
-    { id: 'noche', nombre: 'Noche', emoji: '🌙', colores: ['#191420', '#f06a9b', '#262030'] },
-    { id: 'menta', nombre: 'Menta', emoji: '🌿', colores: ['#f1faf5', '#2eb381', '#ffffff'] },
-    { id: 'lavanda', nombre: 'Lila', emoji: '💜', colores: ['#f5f2ff', '#8b6ef0', '#ffffff'] },
+    { id: '', nombre: I18N.lang === 'en' ? 'Original' : 'Original', emoji: '💗', colores: ['#fff5f8', '#f06a9b', '#ffffff'] },
+    { id: 'noche', nombre: I18N.lang === 'en' ? 'Night' : 'Noche', emoji: '🌙', colores: ['#191420', '#f06a9b', '#262030'] },
+    { id: 'menta', nombre: I18N.lang === 'en' ? 'Mint' : 'Menta', emoji: '🌿', colores: ['#f1faf5', '#2eb381', '#ffffff'] },
+    { id: 'lavanda', nombre: I18N.lang === 'en' ? 'Lilac' : 'Lila', emoji: '💜', colores: ['#f5f2ff', '#8b6ef0', '#ffffff'] },
   ];
   const LS_TEMA = 'maya.tema.v1';
 
@@ -3938,7 +4028,6 @@
   sessionStorage.removeItem('maya.ir-login');
   const teniaSesionReal = Store.hasSession();
   if (paramsURL.has('demo') || (!teniaSesionReal && !quiereLogin)) {
-    if (!localStorage.getItem('maya.idioma.v1')) I18N.set('en'); // demo público: inglés por defecto
     const seedDemo = datosDemo();
     seedDemo.bebe.avatar = ilustracionDemo('avatar');
     const ahoraDemo = Date.now();

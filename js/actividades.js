@@ -100,6 +100,65 @@ const Actividades = (() => {
     },
   ];
 
+
+  /* ---------- traduccion EN (aplicada al cargar; cambiar idioma recarga) ---------- */
+  if (typeof I18N !== 'undefined' && I18N.lang === 'en') {
+    const NOMBRES_EN = ['Newborn', '1-2 months', '2-4 months', '4-6 months', '6-9 months', '9-12 months'];
+    const T_EN = {
+      '0:tummy': ['Tummy time', 'On her belly, awake and supervised, on your chest or a blanket. Builds neck and back strength. 2-3 short sessions a day.'],
+      '0:piel': ['Skin-to-skin', "Direct contact on mom's or dad's chest. Regulates her temperature and heartbeat - and fills her with love."],
+      '0:hablar': ['Talk & sing to her', 'Your voice is her favorite sound. Tell her about your day, sing softly while changing or feeding her.'],
+      '0:caritas': ['Face time', "8-12 inches from her face (her best focus range). Make gentle faces - you are her first toy."],
+      '0:masaje': ['Gentle massage', 'Slow, firm strokes on her arms, legs and back after bath or diaper change.'],
+      '0:lectura': ['Read her a story', 'Never too early: the rhythm of reading builds her brain and your bond.'],
+      '1:tummy': ['Tummy time', 'She can hold it a bit longer now. Get down to her level and talk to encourage her to lift her head.'],
+      '1:contraste': ['Visual tracking', 'Slowly move a high-contrast object (or your face) side to side so she follows it.'],
+      '1:hablar': ['Chat & respond', 'When she makes sounds, answer like a conversation. You are teaching her how talking works.'],
+      '1:sonidos': ['Sounds to the sides', 'A rattle or your voice on one side, then the other: let her find where it comes from.'],
+      '1:masaje': ['Massage & stretches', 'Gentle massage plus "bicycle" legs. Helps with gas too.'],
+      '1:lectura': ['Read her a story', 'High-contrast books or any story in your soft voice.'],
+      '1:piel': ['Skin-to-skin', 'Still pure gold for development and bonding.'],
+      '2:tummy': ['Tummy time', 'Several times a day. Put a toy in front so she lifts her head and pushes up on her arms.'],
+      '2:alcanzar': ['Reaching for toys', 'Hang or hold toys within reach so she tries to bat or grab them.'],
+      '2:espejo': ['Mirror play', 'Let her see herself in a baby mirror - fascinating, and great for visual attention.'],
+      '2:risas': ['Make her smile', 'Big expressions, funny sounds, tummy kisses. Her social smile is blooming.'],
+      '2:hablar': ['Echo her babbles', 'Repeat her "agoo" and wait for a reply. Real conversational turns.'],
+      '2:lectura': ['Read her a story', 'Point at pictures and give the characters voices.'],
+      '3:tummy': ['Tummy time & rolling', 'Encourage rolling by placing toys at her side. Celebrate every try.'],
+      '3:sentada': ['Sitting practice', 'Sit her with support (your hands or cushions) to strengthen her core.'],
+      '3:texturas': ['Explore textures', 'Fabrics, bumpy toys, soft, cool: let her touch everything (always supervised).'],
+      '3:hablar': ['Name the world', 'Say the names of what she sees and touches: "apple", "dog", "water". Her brain stores it all.'],
+      '3:risas': ['Anticipation games', '"Here comes the airplane...": the wait and the surprise make her laugh and learn.'],
+      '3:lectura': ['Read her a story', 'Let her touch and swat the pages. Cloth or thick board books.'],
+      '4:peekaboo': ['Play peekaboo', 'Where is mommy? Here she is! She is learning things exist even when unseen.'],
+      '4:sentada': ['Sit & reach', 'While sitting, place toys slightly out of reach so she stretches and balances.'],
+      '4:gateo': ['Encourage crawling', 'Toys just out of reach on the floor - and you crawling next to her as the example.'],
+      '4:objetos': ['Hand-to-hand', 'Give her safe objects to pass between hands, bang and drop.'],
+      '4:hablar': ['Sounds & names', 'Repeat "ma-ma", "da-da". Name the people in photos.'],
+      '4:lectura': ['Read her a story', 'Ask "where is the cat?" and point. Soon she will do it herself.'],
+      '5:caminar': ['Standing practice', 'Let her pull up on sturdy furniture and cruise sideways.'],
+      '5:pinza': ['Pincer grasp', 'Cereal puffs or soft bits to pick up with finger and thumb (supervised).'],
+      '5:apilar': ['Stack & dump', 'Blocks to stack, things to put in and out of a bin: pure science for her.'],
+      '5:imitar': ['Imitate gestures', 'Clapping, waving bye-bye, blowing kisses. Imitation is her superpower right now.'],
+      '5:hablar': ['First words', 'Speak slowly and clearly. Celebrate any word attempt like a World Cup goal.'],
+      '5:lectura': ['Read her a story', 'Let her turn the pages and "read" along with you.'],
+    };
+    ETAPAS.forEach((e, i) => {
+      e.nombre = NOMBRES_EN[i] || e.nombre;
+      e.tareas.forEach(t => { const tr = T_EN[i + ':' + t.key]; if (tr) { t.titulo = tr[0]; t.desc = tr[1]; } });
+    });
+    const C_EN = {
+      luz: ['Indirect light bath', 'Near a window with natural indirect light (never direct sun). Helps bring bilirubin down.', 'Jaundice'],
+      'tomas-frec': ['Keep feeds frequent', 'Eating often (8-12 times a day) helps clear bilirubin. Check that today\'s feeds are on track.', 'Jaundice'],
+      bici: ['Bicycle legs & tummy massage', 'Bicycle motions with her legs and clockwise belly massage, for gas.', 'Colic'],
+      erguida: ['Keep her upright after feeds', 'Hold her vertical 20-30 min after feeding so the milk settles.', 'Reflux'],
+    };
+    POR_CONDICION.forEach(g => g.tareas.forEach(t => {
+      const tr = C_EN[t.key];
+      if (tr) { t.titulo = tr[0]; t.desc = tr[1]; if (t.porCondicion) t.porCondicion = tr[2]; }
+    }));
+  }
+
   const normalizar = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
   function etapaDe(edadDias) {
@@ -157,14 +216,14 @@ const Actividades = (() => {
     registros.filter(a => a.hecha).forEach(a => porDia[a.fecha] = (porDia[a.fecha] || 0) + 1);
     const diasPerfectos = Object.values(porDia).filter(n => n >= 5).length;
     return [
-      { emoji: '🌱', nombre: 'Primer reto', desc: 'Completaron su primera actividad', ganada: total >= 1 },
-      { emoji: '⭐', nombre: 'Buen ritmo', desc: '10 actividades completadas', ganada: total >= 10 },
-      { emoji: '🔥', nombre: 'Racha de 3', desc: '3 días seguidos con retos', ganada: rachaActual >= 3 },
-      { emoji: '🏆', nombre: 'Racha de 7', desc: 'Una semana entera, ¡wow!', ganada: rachaActual >= 7 },
-      { emoji: '💎', nombre: 'Día perfecto', desc: '5+ retos en un solo día', ganada: diasPerfectos >= 1 },
-      { emoji: '📸', nombre: 'Su primer retrato', desc: 'Primera foto semanal', ganada: fotosSemanales >= 1 },
-      { emoji: '🎞️', nombre: 'Coleccionistas', desc: '4 fotos semanales', ganada: fotosSemanales >= 4 },
-      { emoji: '👑', nombre: 'Mes dorado', desc: '30 días de racha', ganada: rachaActual >= 30 },
+      { emoji: '🌱', nombre: I18N.lang === 'en' ? 'First goal' : 'Primer reto', desc: I18N.lang === 'en' ? 'Completed their first activity' : 'Completaron su primera actividad', ganada: total >= 1 },
+      { emoji: '⭐', nombre: I18N.lang === 'en' ? 'Good rhythm' : 'Buen ritmo', desc: I18N.lang === 'en' ? '10 activities completed' : '10 actividades completadas', ganada: total >= 10 },
+      { emoji: '🔥', nombre: I18N.lang === 'en' ? '3-day streak' : 'Racha de 3', desc: I18N.lang === 'en' ? '3 days in a row with goals' : '3 días seguidos con retos', ganada: rachaActual >= 3 },
+      { emoji: '🏆', nombre: I18N.lang === 'en' ? '7-day streak' : 'Racha de 7', desc: I18N.lang === 'en' ? 'A whole week — wow!' : 'Una semana entera, ¡wow!', ganada: rachaActual >= 7 },
+      { emoji: '💎', nombre: I18N.lang === 'en' ? 'Perfect day' : 'Día perfecto', desc: I18N.lang === 'en' ? '5+ goals in a single day' : '5+ retos en un solo día', ganada: diasPerfectos >= 1 },
+      { emoji: '📸', nombre: I18N.lang === 'en' ? 'Her first portrait' : 'Su primer retrato', desc: I18N.lang === 'en' ? 'First weekly photo' : 'Primera foto semanal', ganada: fotosSemanales >= 1 },
+      { emoji: '🎞️', nombre: I18N.lang === 'en' ? 'Collectors' : 'Coleccionistas', desc: I18N.lang === 'en' ? '4 weekly photos' : '4 fotos semanales', ganada: fotosSemanales >= 4 },
+      { emoji: '👑', nombre: I18N.lang === 'en' ? 'Golden month' : 'Mes dorado', desc: I18N.lang === 'en' ? '30-day streak' : '30 días de racha', ganada: rachaActual >= 30 },
     ];
   }
 

@@ -1056,3 +1056,13 @@ details.card[open] summary::after { transform: rotate(90deg); }
 .entry .entry-actions button { transition: opacity .2s, transform .16s var(--spring); }
 .entry .entry-actions button:active { transform: scale(.85); }
 ::selection { background: var(--pink-soft); }
+
+/* saludo del día en Inicio */
+.hero-inicio {
+  display: flex; align-items: center; gap: 14px;
+  padding: 6px 6px 14px;
+  animation: hero-in .5s var(--suave);
+}
+.hero-inicio .hi-emoji { font-size: 34px; animation: flota-suave 4s ease-in-out infinite; }
+.hero-inicio .hi-saludo { font-size: 20px; font-weight: 800; letter-spacing: -.4px; }
+.hero-inicio .hi-frase { font-size: 13px; color: var(--text-2); font-weight: 600; }
