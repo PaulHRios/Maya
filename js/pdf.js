@@ -3,9 +3,9 @@
 const PDFResumen = (() => {
 
   const ROSA = [240, 106, 155];
-  const fmtFecha = d => new Date(d).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
-  const fmtFechaHora = d => new Date(d).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  const fmtHora = d => new Date(d).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+  const fmtFecha = d => new Date(d).toLocaleDateString(I18N.loc(), { day: 'numeric', month: 'short' });
+  const fmtFechaHora = d => new Date(d).toLocaleString(I18N.loc(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const fmtHora = d => new Date(d).toLocaleTimeString(I18N.loc(), { hour: '2-digit', minute: '2-digit' });
 
   function diasEnRango(desde, hasta) {
     const dias = [];
@@ -76,12 +76,12 @@ const PDFResumen = (() => {
     doc.setFontSize(11);
     doc.setFont(undefined, 'normal');
     doc.setTextColor(120, 100, 115);
-    doc.text(`Del ${desde.toLocaleDateString('es-MX', { dateStyle: 'long' })} al ${hasta.toLocaleDateString('es-MX', { dateStyle: 'long' })}`, 14, 29);
+    doc.text(`Del ${desde.toLocaleDateString(I18N.loc(), { dateStyle: 'long' })} al ${hasta.toLocaleDateString(I18N.loc(), { dateStyle: 'long' })}`, 14, 29);
     if (d.bebe.nacimiento) {
       const nacio = new Date(`${d.bebe.nacimiento}T${d.bebe.hora || '12:00'}`);
       const edadDias = Math.floor((hasta - nacio) / 86400000);
-      const horaTxt = d.bebe.hora ? ` a las ${nacio.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' })}` : '';
-      doc.text(`Nació el ${nacio.toLocaleDateString('es-MX', { dateStyle: 'long' })}${horaTxt} · ${edadDias} días de vida`, 14, 36);
+      const horaTxt = d.bebe.hora ? ` a las ${nacio.toLocaleTimeString(I18N.loc(), { hour: 'numeric', minute: '2-digit' })}` : '';
+      doc.text(`Nació el ${nacio.toLocaleDateString(I18N.loc(), { dateStyle: 'long' })}${horaTxt} · ${edadDias} días de vida`, 14, 36);
     }
     if (d.bebe.mama || d.bebe.papa) {
       const papas = [d.bebe.mama && `Mamá: ${d.bebe.mama}`, d.bebe.papa && `Papá: ${d.bebe.papa}`].filter(Boolean).join(' · ');
@@ -140,8 +140,8 @@ const PDFResumen = (() => {
           data: {
             labels: dias.map(fmtFecha),
             datasets: [
-              { label: 'Pipí', data: cuenta('pipi'), backgroundColor: '#74b9f0', borderRadius: 8 },
-              { label: 'Popó', data: cuenta('popo'), backgroundColor: '#c79a6b', borderRadius: 8 },
+              { label: 'Pipí', data: cuenta('pipi'), backgroundColor: '#3d8fe0', borderRadius: 8 },
+              { label: 'Popó', data: cuenta('popo'), backgroundColor: '#a06a2c', borderRadius: 8 },
               { label: 'Pañales usados', data: usados, type: 'line', borderColor: '#d94f84', backgroundColor: '#d94f84', tension: .3, pointRadius: 4 },
             ],
           },
@@ -272,7 +272,7 @@ const PDFResumen = (() => {
       doc.setPage(i);
       doc.setFontSize(8);
       doc.setTextColor(170, 150, 160);
-      doc.text(`Diario de ${d.bebe.nombre || 'Maya'} · generado el ${new Date().toLocaleString('es-MX')} · página ${i} de ${pages}`, 14, 290);
+      doc.text(`Diario de ${d.bebe.nombre || 'Maya'} · generado el ${new Date().toLocaleString(I18N.loc())} · página ${i} de ${pages}`, 14, 290);
     }
 
     doc.save(`Resumen-${d.bebe.nombre || 'Maya'}-${new Date().toISOString().slice(0, 10)}.pdf`);

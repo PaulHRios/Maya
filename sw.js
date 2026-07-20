@@ -1,10 +1,11 @@
 /* Service worker: deja usar la app sin internet (los datos viven en el
    dispositivo y se sincronizan cuando vuelve la conexión). */
-const CACHE = 'maya-v7';
+const CACHE = 'maya-v9';
 const ARCHIVOS = [
   './',
   './index.html',
   './css/styles.css',
+  './js/i18n.js',
   './js/store.js',
   './js/actividades.js',
   './js/analisis.js',

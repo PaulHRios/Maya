@@ -9,15 +9,15 @@
   let tickInterval = null;
 
   /* ---------- formato ---------- */
-  const fmtHora = iso => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-  const fmtFechaLarga = d => d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+  const fmtHora = iso => new Date(iso).toLocaleTimeString(I18N.loc(), { hour: '2-digit', minute: '2-digit' });
+  const fmtFechaLarga = d => d.toLocaleDateString(I18N.loc(), { weekday: 'long', day: 'numeric', month: 'long' });
 
   function fmtDia(iso) {
     const d = new Date(iso), hoy = new Date();
     const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
     if (d.toDateString() === hoy.toDateString()) return 'Hoy';
     if (d.toDateString() === ayer.toDateString()) return 'Ayer';
-    return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' });
+    return d.toLocaleDateString(I18N.loc(), { weekday: 'long', day: 'numeric', month: 'short' });
   }
 
   function hace(iso) {
@@ -62,12 +62,21 @@
 
   function abrirSheet(html) {
     $('#sheet-content').innerHTML = html;
+    I18N.aplicar($('#sheet-content'));
     $('#sheet').classList.remove('hidden');
     $('#sheet-backdrop').classList.remove('hidden');
   }
   function cerrarSheet() {
-    $('#sheet').classList.add('hidden');
-    $('#sheet-backdrop').classList.add('hidden');
+    const sheet = $('#sheet'), back = $('#sheet-backdrop');
+    if (sheet.classList.contains('hidden')) return;
+    sheet.classList.add('cerrando');
+    back.classList.add('cerrando');
+    setTimeout(() => {
+      sheet.classList.add('hidden');
+      back.classList.add('hidden');
+      sheet.classList.remove('cerrando');
+      back.classList.remove('cerrando');
+    }, 210);
   }
   $('#sheet-backdrop').addEventListener('click', cerrarSheet);
 
@@ -1172,7 +1181,7 @@
         fotoId = Store.uid();
         Store.add('fotos', {
           id: fotoId, fecha: new Date().toISOString(),
-          titulo: `Pañal ${new Date().toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`,
+          titulo: `Pañal ${new Date().toLocaleString(I18N.loc(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`,
           archivo: `${new Date().toISOString().slice(0, 10)}-${fotoId}.jpg`,
           dataUrl: fotoPend, sincronizada: false, categoria: 'panal',
         });
@@ -1968,11 +1977,11 @@
       new Chart(cv, {
         type: 'bar',
         data: {
-          labels: dias.map(f => new Date(f + 'T12:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })),
+          labels: dias.map(f => new Date(f + 'T12:00').toLocaleDateString(I18N.loc(), { day: 'numeric', month: 'short' })),
           datasets: [{
             label: 'ml extraídos por día',
             data: dias.map(f => s.porDia[f] || 0),
-            backgroundColor: dias.map(f => (s.porDia[f] || 0) >= s.recordDia && s.recordDia > 0 ? '#f5b54a' : '#74b9f0'),
+            backgroundColor: dias.map(f => (s.porDia[f] || 0) >= s.recordDia && s.recordDia > 0 ? '#f5b54a' : paletaCharts().pipi),
             borderRadius: 8,
           }],
         },
@@ -2155,12 +2164,12 @@
         ${(() => { const r = EPDS.resultados(); return `
         <button class="menu-item" data-accion="epds">
           <span class="mi-emoji bg-mint">💚</span>
-          <span>Bienestar de mamá<span class="mi-sub">${r.length ? `Último chequeo: ${new Date(r[r.length - 1].fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}` : 'Un chequeo para ti, no solo para la bebé'}</span></span>
+          <span>Bienestar de mamá<span class="mi-sub">${r.length ? `Último chequeo: ${new Date(r[r.length - 1].fecha).toLocaleDateString(I18N.loc(), { day: 'numeric', month: 'short' })}` : 'Un chequeo para ti, no solo para la bebé'}</span></span>
           <span class="mi-chev">›</span>
         </button>`; })()}
         ${item('banco', '🥛', 'bg-blue', 'Banco de leche', (() => { const s = saldosBanco(); return `${s.refri} ml listos · ${s.cong} ml congelados`; })())}
         ${item('salud', '🩺', 'bg-pink', 'Condiciones médicas', d.condiciones.length ? d.condiciones.map(c => c.nombre).join(', ') : 'Ictericia, seguimiento de labs…')}
-        ${item('citas', '📅', 'bg-peach', 'Citas médicas', (() => { const p = Store.data.citas.filter(c => !c.hecha && new Date(c.fecha) >= Date.now() - 3600000).sort((a, b) => a.fecha.localeCompare(b.fecha))[0]; return p ? `Próxima: ${new Date(p.fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} · ${esc(p.titulo)}` : 'Consultas, vacunas y laboratorios'; })())}
+        ${item('citas', '📅', 'bg-peach', 'Citas médicas', (() => { const p = Store.data.citas.filter(c => !c.hecha && new Date(c.fecha) >= Date.now() - 3600000).sort((a, b) => a.fecha.localeCompare(b.fecha))[0]; return p ? `Próxima: ${new Date(p.fecha).toLocaleDateString(I18N.loc(), { day: 'numeric', month: 'short' })} · ${esc(p.titulo)}` : 'Consultas, vacunas y laboratorios'; })())}
         ${item('intervenciones', '💉', 'bg-peach', 'Intervenciones', d.intervenciones.length ? `${d.intervenciones.length} registradas` : 'Toma de sangre, vacunas, estudios…')}
         ${item('medicamentos', '💊', 'bg-mint', 'Medicamentos', d.medicamentos.filter(m => m.activo).length ? `${d.medicamentos.filter(m => m.activo).length} activos` : 'Tratamientos y vitaminas')}
         ${item('crecimiento', '📏', 'bg-blue', 'Crecimiento', d.crecimiento.length ? 'Peso, talla y perímetro' : 'Registra peso y talla')}
@@ -2201,7 +2210,7 @@
             <span class="entry-emoji">🎉</span>
             <div class="entry-main">
               <div class="entry-title">${esc(c.nombre)}</div>
-              <div class="entry-sub">Superada el ${new Date(c.curada).toLocaleDateString('es-MX', { dateStyle: 'long' })}</div>
+              <div class="entry-sub">Superada el ${new Date(c.curada).toLocaleDateString(I18N.loc(), { dateStyle: 'long' })}</div>
             </div>
             <button class="btn-ghost" data-reabrir="${c.id}">Reabrir</button>
           </div>`).join('')}</div></details>` : ''}
@@ -2226,7 +2235,7 @@
         ${meds.length >= 2 && meds.filter(m => m.valor !== null && m.valor !== '').length >= 2 ? `<canvas class="chart" id="chart-${c.id}" height="170"></canvas>` : ''}
         ${meds.map(m => `
           <div class="measure-row">
-            <span>${new Date(m.fecha).toLocaleString('es-MX', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${m.nota ? ` · <small>${esc(m.nota)}</small>` : ''}</span>
+            <span>${new Date(m.fecha).toLocaleString(I18N.loc(), { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${m.nota ? ` · <small>${esc(m.nota)}</small>` : ''}</span>
             <span>
               ${(m.valor === null || m.valor === '') ? '<span class="measure-pending">⏳ pendiente</span>' : `<span class="measure-val">${m.valor}${c.unidad ? ` ${esc(c.unidad)}` : ''}</span>`}
               <button class="btn-ghost" data-edit-med="${c.id}:${m.id}" style="padding:2px 4px">✏️</button>
@@ -2254,11 +2263,11 @@
         new Chart(cv, {
           type: 'line',
           data: {
-            labels: datos.map(m => new Date(m.fecha).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })),
+            labels: datos.map(m => new Date(m.fecha).toLocaleString(I18N.loc(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })),
             datasets: [{
               label: `${c.nombre}${c.unidad ? ` (${c.unidad})` : ''}`,
               data: datos.map(m => Number(m.valor)),
-              borderColor: '#f06a9b', backgroundColor: '#f06a9b22',
+              borderColor: paletaCharts().linea, backgroundColor: paletaCharts().linea + '22',
               fill: true, tension: .35, pointRadius: 4,
             }],
           },
@@ -2522,7 +2531,7 @@
             <span class="entry-emoji">📏</span>
             <div class="entry-main">
               <div class="entry-title">${[c.pesoKg ? `${c.pesoKg} kg` : '', c.tallaCm ? `${c.tallaCm} cm` : '', c.perimetroCm ? `PC ${c.perimetroCm} cm` : ''].filter(Boolean).join(' · ')}</div>
-              <div class="entry-sub">${new Date(c.fecha).toLocaleDateString('es-MX', { dateStyle: 'long' })}</div>
+              <div class="entry-sub">${new Date(c.fecha).toLocaleDateString(I18N.loc(), { dateStyle: 'long' })}</div>
             </div>
             ${btnsEntrada('crecimiento', c.id)}
           </div>`).join('') || '<div class="empty-state"><span class="big">📏</span>Registra el peso y talla de cada consulta</div>'}
@@ -2536,7 +2545,7 @@
       new Chart(cv, {
         type: 'line',
         data: {
-          labels: datos.map(c => new Date(c.fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })),
+          labels: datos.map(c => new Date(c.fecha).toLocaleDateString(I18N.loc(), { day: 'numeric', month: 'short' })),
           datasets: [{
             label: 'Peso (kg)', data: datos.map(c => c.pesoKg || null),
             borderColor: '#4cc38a', backgroundColor: '#4cc38a22', fill: true, tension: .35,
@@ -2655,6 +2664,47 @@
     }
   }
 
+  // recorta al centro en cuadrado de 256 px para foto de perfil
+  function recortarAvatar(dataUrl) {
+    return new Promise(res => {
+      const img = new Image();
+      img.onload = () => {
+        const lado = Math.min(img.width, img.height);
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 256;
+        c.getContext('2d').drawImage(img, (img.width - lado) / 2, (img.height - lado) / 2, lado, lado, 0, 0, 256, 256);
+        res(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => res(null);
+      img.src = dataUrl;
+    });
+  }
+
+  function elegirFotoPerfil(alTerminar) {
+    abrirSheet(`
+      <h2>📷 Foto de perfil del bebé</h2>
+      <div class="form-row">
+        <button class="btn-primary" style="flex:1" id="fp-camara">📷 Tomar foto</button>
+        <button class="btn-secondary" style="flex:1" id="fp-carrete">🖼️ Del carrete</button>
+      </div>
+    `);
+    const lanzar = conCamara => {
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/*';
+      if (conCamara) input.capture = 'environment';
+      input.onchange = async e => {
+        cerrarSheet();
+        const crudo = await leerFoto(e.target.files[0]).catch(() => null);
+        if (!crudo) { toast('No se pudo leer la foto'); return; }
+        const avatar = await recortarAvatar(crudo);
+        if (avatar) alTerminar(avatar);
+      };
+      input.click();
+    };
+    $('#fp-camara').onclick = () => lanzar(true);
+    $('#fp-carrete').onclick = () => lanzar(false);
+  }
+
   function pedirFotoSemanal(semana) {
     abrirSheet(`
       <h2>Foto de la semana ${semana} 📸</h2>
@@ -2684,7 +2734,7 @@
     div.className = 'photo-viewer';
     div.innerHTML = `
       <img src="${f.dataUrl || ''}">
-      <div class="pv-caption">${esc(f.titulo || '')}<br><small>${new Date(f.fecha).toLocaleString('es-MX')}</small></div>
+      <div class="pv-caption">${esc(f.titulo || '')}<br><small>${new Date(f.fecha).toLocaleString(I18N.loc())}</small></div>
       <div class="pv-actions">
         <button class="btn-danger" id="pv-del">Borrar</button>
         <button class="btn-secondary" id="pv-close">Cerrar</button>
@@ -2801,8 +2851,15 @@
           </select>
         </div>
         <button class="btn-secondary btn-block" id="a-guardar-bebe">Guardar</button>
+        <button class="btn-secondary btn-block" id="a-foto-perfil" style="margin-top:6px">📷 Foto de perfil del bebé</button>
         <button class="btn-ghost btn-block" data-accion="agregar-bebe" style="margin-top:6px">👶 ＋ Agregar otro bebé (gemelos, el que viene…)</button>
         <button class="btn-ghost btn-block" data-accion="cambiar-tema">🎨 Cambiar tema de color</button>
+        <div class="form-group" style="margin-top:8px"><label>🌐 Idioma / Language</label>
+          <select id="a-idioma">
+            <option value="es" ${I18N.lang === 'es' ? 'selected' : ''}>Español</option>
+            <option value="en" ${I18N.lang === 'en' ? 'selected' : ''}>English</option>
+          </select>
+        </div>
       </div>
 
       <div class="card">
@@ -2814,6 +2871,11 @@
         <button class="btn-secondary btn-block" id="a-agregar-cuenta" style="margin-top:10px">＋ Agregar cuenta de familiar</button>
       </div>
 
+      ${Store.modoDemo ? `
+      <div class="card" style="border-left:5px solid #f5b54a">
+        <h2>🧪 Modo demo</h2>
+        <p style="font-size:13.5px;color:var(--text-2)">Estás en el demo con datos sintéticos: la sincronización está deshabilitada y nada se guarda en ningún servidor. Crea tu cuenta para tener tu propio registro.</p>
+      </div>` : `
       <div class="card">
         <h2>☁️ Sincronización con GitHub</h2>
         <p style="font-size:13px;color:var(--text-2);margin-bottom:12px">
@@ -2838,7 +2900,7 @@
           <button class="btn-primary" style="flex:1" id="a-sync">Sincronizar ahora</button>
         </div>
         <p style="font-size:12px;color:var(--text-2);margin-top:10px">
-          ${cfg.lastSync ? `Última sincronización: ${new Date(cfg.lastSync).toLocaleString('es-MX')}` : 'Aún no se ha sincronizado.'}
+          ${cfg.lastSync ? `Última sincronización: ${new Date(cfg.lastSync).toLocaleString(I18N.loc())}` : 'Aún no se ha sincronizado.'}
         </p>
         <details style="margin-top:8px;font-size:13px;color:var(--text-2)">
           <summary style="font-weight:700;cursor:pointer">¿Cómo configurarlo? (una sola vez)</summary>
@@ -2858,13 +2920,14 @@
           <button class="btn-secondary" style="flex:1" id="a-importar">Importar JSON</button>
         </div>
         <input type="file" id="a-archivo" accept=".json" style="display:none">
-      </div>
+      </div>`}
 
-      <button class="btn-danger btn-block" id="a-logout">Cerrar sesión</button>
+      <button class="btn-danger btn-block" id="a-logout">${Store.modoDemo ? 'Salir del demo' : 'Cerrar sesión'}</button>
     `;
     bindVolver();
+    const on = (sel, fn) => { const el = $(sel); if (el) el.onclick = fn; };
 
-    $('#a-guardar-bebe').onclick = () => {
+    on('#a-guardar-bebe', () => {
       d.bebe.nombre = $('#a-nombre').value.trim() || 'Maya';
       d.bebe.nacimiento = $('#a-nac').value;
       d.bebe.hora = $('#a-hora-nac').value;
@@ -2872,10 +2935,12 @@
       d.bebe.papa = $('#a-papa').value.trim();
       d.bebe.actualizado = new Date().toISOString();
       Store.setDispositivo($('#a-dispositivo').value);
+      const idiomaSel = $('#a-idioma');
+      if (idiomaSel && idiomaSel.value !== I18N.lang) { I18N.set(idiomaSel.value); vistaAnterior = ''; }
       Store.saveLocal();
       toast('Guardado 💗');
       actualizarHeader();
-    };
+    });
 
     const leerCfg = () => {
       Store.config.owner = $('#a-owner').value.trim();
@@ -2884,29 +2949,29 @@
       Store.config.autoSync = $('#a-autosync').checked;
       Store.saveConfig();
     };
-    $('#a-probar').onclick = async () => {
+    on('#a-probar', async () => {
       leerCfg();
       if (!Store.canSync()) { toast('Llena usuario, repo y token'); return; }
       toast(await Store.testConnection() ? 'Conexión exitosa ✅' : 'No se pudo conectar ❌');
-    };
-    $('#a-sync').onclick = async () => {
+    });
+    on('#a-sync', async () => {
       leerCfg();
       if (!Store.canSync()) { toast('Llena usuario, repo y token'); return; }
       toast('Sincronizando…');
       await Store.syncNow();
       toast(Store.syncState === 'ok' ? 'Sincronizado ✅' : 'Error al sincronizar ❌');
       render();
-    };
+    });
 
-    $('#a-exportar').onclick = () => {
+    on('#a-exportar', () => {
       const blob = new Blob([JSON.stringify(Store.data, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = `respaldo-maya-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
-    };
-    $('#a-importar').onclick = () => $('#a-archivo').click();
-    $('#a-archivo').onchange = e => {
+    });
+    on('#a-importar', () => $('#a-archivo').click());
+    if ($('#a-archivo')) $('#a-archivo').onchange = e => {
       const file = e.target.files[0];
       if (!file) return;
       const fr = new FileReader();
@@ -2923,7 +2988,15 @@
       fr.readAsText(file);
     };
 
-    $('#a-agregar-cuenta').onclick = () => {
+    on('#a-foto-perfil', () => elegirFotoPerfil(avatar => {
+      Store.data.bebe.avatar = avatar;
+      Store.data.bebe.actualizado = new Date().toISOString();
+      Store.saveLocal();
+      cargarAvatar();
+      toast('Foto de perfil actualizada 📷');
+    }));
+
+    on('#a-agregar-cuenta', () => {
       let rol = 'papa';
       abrirSheet(`
         <h2>Agregar cuenta de familiar 👪</h2>
@@ -2955,7 +3028,7 @@
         toast('Cuenta agregada 👪');
         render();
       };
-    };
+    });
 
     $('#a-logout').onclick = () => {
       Store.logout();
@@ -3182,6 +3255,13 @@
     });
   });
 
+  $('#btn-idioma').onclick = () => {
+    I18N.set(I18N.lang === 'en' ? 'es' : 'en');
+    toast(I18N.lang === 'en' ? 'English 🌐' : 'Español 🌐');
+    vistaAnterior = ''; // forzar re-render completo con transición
+    render();
+  };
+
   $('#btn-settings').onclick = () => {
     tabActual = 'mas';
     vistaMas = 'ajustes';
@@ -3237,10 +3317,24 @@
       celebracion('👶', `¡Bienvenida ${nombre}!`, 'Su registro está listo');
       render();
       cargarAvatar();
+      setTimeout(() => elegirFotoPerfil(avatar => {
+        Store.data.bebe.avatar = avatar;
+        Store.saveLocal();
+        cargarAvatar();
+        toast('¡Qué carita! 📷💗');
+      }), 3600);
     };
   }
 
+  let vistaAnterior = '';
   function render() {
+    const vistaActual = `${tabActual}/${vistaMas || ''}`;
+    if (vistaActual !== vistaAnterior) {
+      vistaAnterior = vistaActual;
+      main.classList.remove('cambio');
+      void main.offsetWidth; // reiniciar la animación
+      main.classList.add('cambio');
+    }
     renderBebesBar();
     renderTimers();
     actualizarHeader();
@@ -3251,6 +3345,17 @@
     else if (tabActual === 'panal') renderPanal();
     else if (tabActual === 'retos') renderRetos();
     else renderMas();
+    I18N.aplicar(main);
+    pintarTabs();
+  }
+
+  const TABS_LABELS = { inicio: 'Inicio', comida: 'Comida', sueno: 'Sueño', panal: 'Pañal', retos: 'Retos', mas: 'Más' };
+  function pintarTabs() {
+    document.querySelectorAll('.tab').forEach(tb => {
+      const span = tb.querySelector('span:last-child');
+      const clave = TABS_LABELS[tb.dataset.tab];
+      if (span && clave) span.textContent = I18N.t(clave);
+    });
   }
 
   /* ---------- calendario nativo (.ics con alarma) ---------- */
@@ -3303,7 +3408,7 @@
         <span class="entry-emoji">🩺</span>
         <div class="entry-main">
           <div class="entry-title">${esc(c.titulo)}${c.hecha ? ' ✅' : ''}</div>
-          <div class="entry-sub">${new Date(c.fecha).toLocaleString('es-MX', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${c.lugar ? ` · 📍 ${esc(c.lugar)}` : ''}${c.notas ? ` · ${esc(c.notas)}` : ''}</div>
+          <div class="entry-sub">${new Date(c.fecha).toLocaleString(I18N.loc(), { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${c.lugar ? ` · 📍 ${esc(c.lugar)}` : ''}${c.notas ? ` · ${esc(c.notas)}` : ''}</div>
         </div>
         <div class="entry-actions">
           ${!c.hecha ? `<button data-ics-cita="${c.id}" title="Agregar al calendario">🔔</button>` : ''}
@@ -3480,6 +3585,7 @@
   function aplicarTema(id) {
     if (id) document.documentElement.dataset.tema = id;
     else delete document.documentElement.dataset.tema;
+    if (typeof ajustarCharts === 'function') try { ajustarCharts(); } catch {}
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = (TEMAS.find(t => t.id === id) || TEMAS[0]).colores[0];
   }
@@ -3507,6 +3613,30 @@
       toast(`${t.emoji} Tema ${t.nombre} aplicado`);
     });
   }
+
+  // colores de gráficas validados (accesibilidad CVD) por tema
+  const PALETA_CHARTS = {
+    claro: { pipi: '#3d8fe0', popo: '#a06a2c', linea: '#d94f84', texto: '#7d7185', rejilla: 'rgba(43,35,48,.07)' },
+    noche: { pipi: '#4a97e8', popo: '#b8843c', linea: '#e4548c', texto: '#ab9db0', rejilla: 'rgba(255,255,255,.09)' },
+  };
+  function paletaCharts() {
+    return document.documentElement.dataset.tema === 'noche' ? PALETA_CHARTS.noche : PALETA_CHARTS.claro;
+  }
+  function ajustarCharts() {
+    if (typeof Chart === 'undefined') return;
+    const p = paletaCharts();
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    Chart.defaults.font.size = 11;
+    Chart.defaults.color = p.texto;
+    Chart.defaults.borderColor = p.rejilla;
+    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(43,35,48,.92)';
+    Chart.defaults.plugins.tooltip.cornerRadius = 10;
+    Chart.defaults.plugins.tooltip.padding = 10;
+    Chart.defaults.plugins.legend.labels.boxWidth = 14;
+    Chart.defaults.plugins.legend.labels.borderRadius = 4;
+    Chart.defaults.plugins.legend.labels.useBorderRadius = true;
+  }
+  ajustarCharts();
 
   // aplicar el tema guardado desde el arranque (antes del login incluso)
   aplicarTema(localStorage.getItem(LS_TEMA) || '');
@@ -3552,14 +3682,14 @@
     if (!Store.getDispositivo() && !Store.modoDemo) {
       setTimeout(preguntarDispositivo, 600);
     }
-    // primera vez en este teléfono: elegir tema de color
-    if (localStorage.getItem(LS_TEMA) === null) {
+    // primera vez en este teléfono: elegir tema de color (no en demo)
+    if (localStorage.getItem(LS_TEMA) === null && !Store.modoDemo) {
       setTimeout(() => elegirTema(true), Store.getDispositivo() ? 700 : 1600);
     }
     // aviso de etapa nueva (cólicos, dientes…), uno por vez
     setTimeout(avisoEtapaNueva, 2600);
     // chequeo de bienestar de mamá (solo su teléfono, según calendario)
-    if (Store.getDispositivo() === 'mama') {
+    if (Store.getDispositivo() === 'mama' && !Store.modoDemo) {
       setTimeout(() => { if (EPDS.tocaChequeo(edadDias())) invitarEPDS(); }, 4200);
     }
 
@@ -3592,6 +3722,9 @@
   /* ---------- avatar y actualizar con un toque ---------- */
   async function cargarAvatar() {
     const img = $('#header-avatar');
+    img.classList.add('hidden');
+    const propia = Store.data.bebe && Store.data.bebe.avatar;
+    if (propia) { img.src = propia; img.classList.remove('hidden'); return; }
     const cache = Store.getAvatarCache();
     if (cache) { img.src = cache; img.classList.remove('hidden'); }
     const fresco = await Store.fetchAvatar();
@@ -3768,12 +3901,53 @@
     return d;
   }
 
+  /* ilustraciones sintéticas para el demo: carita y escenas dibujadas
+     por la propia app con canvas — cero fotos reales, cero copyright */
+  function ilustracionDemo(tipo) {
+    const c = document.createElement('canvas');
+    c.width = 480; c.height = 480;
+    const x = c.getContext('2d');
+    const fondos = { avatar: ['#ffe3ee', '#e9e2ff'], luna: ['#2b2a4a', '#4a3a6b'], osito: ['#fff2dd', '#ffdfc0'], globos: ['#e3f0ff', '#dff5ea'] };
+    const g = x.createLinearGradient(0, 0, 480, 480);
+    const [c1, c2] = fondos[tipo] || fondos.avatar;
+    g.addColorStop(0, c1); g.addColorStop(1, c2);
+    x.fillStyle = g; x.fillRect(0, 0, 480, 480);
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    if (tipo === 'avatar') {
+      x.fillStyle = '#ffd9c4'; x.beginPath(); x.arc(240, 250, 130, 0, 7); x.fill();      // carita
+      x.fillStyle = '#8a5a3b'; x.beginPath(); x.arc(240, 150, 70, Math.PI, 0); x.fill(); // pelito
+      x.fillStyle = '#2b2330';
+      x.beginPath(); x.arc(195, 235, 10, 0, 7); x.fill();
+      x.beginPath(); x.arc(285, 235, 10, 0, 7); x.fill();                                 // ojitos
+      x.strokeStyle = '#c0392b'; x.lineWidth = 8; x.lineCap = 'round';
+      x.beginPath(); x.arc(240, 285, 28, .25 * Math.PI, .75 * Math.PI); x.stroke();       // sonrisa
+      x.fillStyle = '#f5a9c0'; x.globalAlpha = .6;
+      x.beginPath(); x.arc(175, 275, 16, 0, 7); x.fill();
+      x.beginPath(); x.arc(305, 275, 16, 0, 7); x.fill();                                 // chapitas
+      x.globalAlpha = 1;
+    } else {
+      const emoji = { luna: '🌙', osito: '🧸', globos: '🎈' }[tipo] || '💗';
+      x.font = '200px serif'; x.fillText(emoji, 240, 250);
+      x.font = '40px serif'; x.fillText('✨', 120, 120); x.fillText('✨', 370, 360);
+    }
+    return c.toDataURL('image/jpeg', 0.82);
+  }
+
   const paramsURL = new URLSearchParams(location.search);
   const quiereLogin = paramsURL.has('login') || sessionStorage.getItem('maya.ir-login') === '1';
   sessionStorage.removeItem('maya.ir-login');
   const teniaSesionReal = Store.hasSession();
   if (paramsURL.has('demo') || (!teniaSesionReal && !quiereLogin)) {
-    Store.activarDemo(datosDemo());
+    if (!localStorage.getItem('maya.idioma.v1')) I18N.set('en'); // demo público: inglés por defecto
+    const seedDemo = datosDemo();
+    seedDemo.bebe.avatar = ilustracionDemo('avatar');
+    const ahoraDemo = Date.now();
+    seedDemo.fotos = [
+      { id: 'demo-f1', fecha: new Date(ahoraDemo - 86400000).toISOString(), titulo: I18N.lang === 'en' ? 'First nap in her crib 🌙' : 'Primera siesta en su cuna 🌙', archivo: '', dataUrl: ilustracionDemo('luna'), sincronizada: true, semana: 4 },
+      { id: 'demo-f2', fecha: new Date(ahoraDemo - 3 * 86400000).toISOString(), titulo: I18N.lang === 'en' ? 'Meeting her teddy 🧸' : 'Conociendo a su osito 🧸', archivo: '', dataUrl: ilustracionDemo('osito'), sincronizada: true },
+      { id: 'demo-f3', fecha: new Date(ahoraDemo - 5 * 86400000).toISOString(), titulo: I18N.lang === 'en' ? 'One month party 🎈' : 'Fiesta de un mes 🎈', archivo: '', dataUrl: ilustracionDemo('globos'), sincronizada: true },
+    ];
+    Store.activarDemo(seedDemo);
     const listaDemo = document.createElement('button');
     listaDemo.className = 'demo-liston clickeable';
     listaDemo.innerHTML = '🧪 DEMO con datos sintéticos · <u>' + (teniaSesionReal ? 'volver a mi cuenta' : 'entrar o crear cuenta') + '</u>';

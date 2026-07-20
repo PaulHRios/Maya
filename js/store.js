@@ -173,6 +173,7 @@ const Store = (() => {
   }
 
   function cuentasDeFamilia() {
+    if (modoDemo) return [{ email: 'mom@demo.family', quien: 'mama' }, { email: 'dad@demo.family', quien: 'papa' }];
     const f = familiaActiva();
     const propias = cuentasLocales().filter(c => c.familia === f).map(c => ({ email: c.email, quien: c.quien }));
     if (f === 'maya') return [{ email: 'papá (integrada)', quien: 'papa' }, { email: 'mamá (integrada)', quien: 'mama' }, ...propias];
@@ -269,6 +270,7 @@ const Store = (() => {
       const raw = localStorage.getItem(kData(bebeActivo));
       if (raw) data = Object.assign(emptyData(), JSON.parse(raw));
       config = { owner: '', repo: '', branch: 'main', token: '', autoSync: true, lastSync: null };
+      if (modoDemo) return; // el demo jamás ve la configuración real
       const rawCfg = localStorage.getItem(kConfig());
       if (rawCfg) config = Object.assign(config, JSON.parse(rawCfg));
       if (familiaActiva() === 'maya') {
@@ -287,6 +289,7 @@ const Store = (() => {
   }
 
   function saveConfig() {
+    if (modoDemo) return; // nada del demo se persiste como configuración real
     localStorage.setItem(kConfig(), JSON.stringify(config));
   }
 
