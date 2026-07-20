@@ -27,8 +27,13 @@
     if (min < 1) return en ? 'just now' : 'ahora mismo';
     if (min < 60) return en ? `${min} min ago` : `hace ${min} min`;
     const h = Math.floor(min / 60);
-    if (h < 24) return en ? `${h} h ${min % 60} min ago` : `hace ${h} h ${min % 60} min`;
-    return en ? `${Math.floor(h / 24)} day(s) ago` : `hace ${Math.floor(h / 24)} día(s)`;
+    if (h < 24) {
+      const rm = min % 60;
+      if (en) return rm ? `${h} h ${rm} min ago` : `${h} h ago`;
+      return rm ? `hace ${h} h ${rm} min` : `hace ${h} h`;
+    }
+    const dd = Math.floor(h / 24);
+    return en ? `${dd} day${dd === 1 ? '' : 's'} ago` : `hace ${dd} día${dd === 1 ? '' : 's'}`;
   }
 
   function fmtDur(seg) {
@@ -160,11 +165,14 @@
     // pañales físicos gastados: cada registro es un pañal (mixto cuenta uno)
     const panalesHoy = d.panales.filter(p => esHoy(p.hora)).length;
 
-    const nombreTipo = { materno: 'Leche materna', donante: 'Leche extraída', formula: 'Fórmula' };
+    const enI = I18N.lang === 'en';
+    const nombreTipo = enI
+      ? { materno: 'Breast milk', donante: 'Expressed milk', formula: 'Formula' }
+      : { materno: 'Leche materna', donante: 'Leche extraída', formula: 'Fórmula' };
     const descToma = t => {
-      if (!t) return 'Aún sin registros';
+      if (!t) return enI ? 'No entries yet' : 'Aún sin registros';
       const partes = [nombreTipo[t.tipo]];
-      if (t.lado) partes.push(t.lado === 'izq' ? 'izquierda' : 'derecha');
+      if (t.lado) partes.push(t.lado === 'izq' ? (enI ? 'left' : 'izquierda') : (enI ? 'right' : 'derecha'));
       if (t.duracionSeg) partes.push(`${Math.round(t.duracionSeg / 60)} min`);
       if (t.ml) partes.push(`${t.ml} ml`);
       return partes.join(' · ');
@@ -197,24 +205,24 @@
         <div class="stat-card bg-peach">
           <span class="stat-emoji">🍼</span>
           <span class="stat-value">${tomasHoy.length} tomas</span>
-          <span class="stat-label">${mlHoy ? `${mlHoy} ml` : ''}${mlHoy && minPechoHoy ? ' · ' : ''}${minPechoHoy ? `${minPechoHoy} min pecho` : (mlHoy ? '' : 'hoy')}</span>
+          <span class="stat-label">${mlHoy ? `${mlHoy} ml` : ''}${mlHoy && minPechoHoy ? ' · ' : ''}${minPechoHoy ? `${minPechoHoy} min ${enI ? 'breast' : 'pecho'}` : (mlHoy ? '' : (enI ? 'today' : 'hoy'))}</span>
           <span class="stat-ago">${ultToma ? `última ${hace(ultToma.inicio)}` : ''}</span>
         </div>
         <div class="stat-card bg-yellow">
           <span class="stat-emoji">🧷</span>
-          <span class="stat-value">${panalesHoy} pañal${panalesHoy === 1 ? '' : 'es'}</span>
-          <span class="stat-label">gastados hoy</span>
-          <span class="stat-ago">${ultPanal ? `último ${hace(ultPanal.hora)}` : ''}</span>
+          <span class="stat-value">${panalesHoy} ${enI ? (panalesHoy === 1 ? 'diaper' : 'diapers') : 'pañal' + (panalesHoy === 1 ? '' : 'es')}</span>
+          <span class="stat-label">${enI ? 'used today' : 'gastados hoy'}</span>
+          <span class="stat-ago">${ultPanal ? (enI ? `last ${hace(ultPanal.hora)}` : `último ${hace(ultPanal.hora)}`) : ''}</span>
         </div>
         <div class="stat-card bg-blue">
           <span class="stat-emoji">💧</span>
-          <span class="stat-value">${pipiHoy} pipí</span>
-          <span class="stat-label">hoy</span>
+          <span class="stat-value">${pipiHoy} ${enI ? 'pee' : 'pipí'}</span>
+          <span class="stat-label">${enI ? 'today' : 'hoy'}</span>
         </div>
         <div class="stat-card bg-mint">
           <span class="stat-emoji">💩</span>
-          <span class="stat-value">${popoHoy} popó</span>
-          <span class="stat-label">hoy</span>
+          <span class="stat-value">${popoHoy} ${enI ? 'poop' : 'popó'}</span>
+          <span class="stat-label">${enI ? 'today' : 'hoy'}</span>
         </div>
       </div>
 
@@ -223,7 +231,7 @@
         const r = Analisis.generar(Store.data, edadDias());
         return `<div class="analisis-mini" data-accion="ver-analisis">
           <span class="am-emoji">${r.estado.emoji}</span>
-          <span class="am-texto">${r.estado.titulo}<span class="am-sub">${r.hallazgos.length} punto${r.hallazgos.length === 1 ? '' : 's'} en su análisis de hoy · toca para ver</span></span>
+          <span class="am-texto">${r.estado.titulo}<span class="am-sub">${enI ? `${r.hallazgos.length} point${r.hallazgos.length === 1 ? '' : 's'} in today's check · tap to view` : `${r.hallazgos.length} punto${r.hallazgos.length === 1 ? '' : 's'} en su análisis de hoy · toca para ver`}</span></span>
           <span class="mi-chev" style="color:#d4c6cd">›</span>
         </div>`;
       })()}
@@ -266,7 +274,10 @@
   function renderComida() {
     const timers = Store.getTimers();
     const d = Store.data;
-    const nombreTipo = { materno: 'Materna', donante: 'Extraída', formula: 'Fórmula' };
+    const enC = I18N.lang === 'en';
+    const nombreTipo = enC
+      ? { materno: 'Breast', donante: 'Expressed', formula: 'Formula' }
+      : { materno: 'Materna', donante: 'Extraída', formula: 'Fórmula' };
 
     let panel = '';
     if (tipoComida === 'materno') {
@@ -301,7 +312,7 @@
         <div class="entry">
           <span class="entry-emoji">${t.tipo === 'materno' ? '🤱' : t.tipo === 'donante' ? '🥛' : '🍼'}</span>
           <div class="entry-main">
-            <div class="entry-title">${nombreTipo[t.tipo]}${t.lado ? ` · ${t.lado === 'izq' ? 'izquierda' : 'derecha'}` : ''}</div>
+            <div class="entry-title">${nombreTipo[t.tipo]}${t.lado ? ` · ${t.lado === 'izq' ? (enC ? 'left' : 'izquierda') : (enC ? 'right' : 'derecha')}` : ''}</div>
             <div class="entry-sub">${[t.duracionSeg ? `${Math.round(t.duracionSeg / 60)} min` : '', t.ml ? `${t.ml} ml` : '', t.notas ? esc(t.notas) : ''].filter(Boolean).join(' · ') || '—'}${etiquetaAutor(t)}</div>
           </div>
           <span class="entry-time">${fmtHora(t.inicio)}</span>
@@ -413,7 +424,7 @@
     if (timers.toma) { toast('Ya hay una toma en curso'); return; }
     timers.toma = { lado, inicio: new Date().toISOString(), pausas: [] };
     Store.setTimers(timers);
-    toast(`Timer iniciado · pecho ${lado === 'izq' ? 'izquierdo' : 'derecho'} ▶`);
+    toast(I18N.lang === 'en' ? `Timer started · ${lado === 'izq' ? 'left' : 'right'} breast ▶` : `Timer iniciado · pecho ${lado === 'izq' ? 'izquierdo' : 'derecho'} ▶`);
   }
 
   function pausarToma() {
@@ -441,7 +452,7 @@
     Store.setTimers(timers);
     if (cancelar) { toast('Toma cancelada'); return; }
     Store.add('tomas', { tipo: 'materno', lado: t.lado, inicio: t.inicio, duracionSeg: dur, ml: null, notas: '' });
-    toast(`Toma guardada · ${fmtDur(dur)} 🤱`);
+    toast(`${I18N.lang === 'en' ? 'Feed saved' : 'Toma guardada'} · ${fmtDur(dur)} 🤱`);
   }
 
   /* ============================================================
@@ -451,7 +462,7 @@
 
   /* ---------- ventanas de despierto por edad (en minutos) ---------- */
   const VENTANAS_SUENO = [
-    { desde: 0, hasta: 4, min: 45, max: 60, siestas: I18N.lang === 'en' ? '4–6 naps · 14–17 h de sueño per day' : '4–6 siestas · 14–17 h de sueño al día' },
+    { desde: 0, hasta: 4, min: 45, max: 60, siestas: I18N.lang === 'en' ? '4–6 naps · 14–17 h of sleep per day' : '4–6 siestas · 14–17 h de sueño al día' },
     { desde: 4, hasta: 9, min: 45, max: 75, siestas: I18N.lang === 'en' ? '4–5 naps · 14–17 h per day' : '4–5 siestas · 14–17 h al día' },
     { desde: 9, hasta: 13, min: 60, max: 90, siestas: I18N.lang === 'en' ? '4–5 naps · 14–16 h per day' : '4–5 siestas · 14–16 h al día' },
     { desde: 13, hasta: 17, min: 75, max: 120, siestas: I18N.lang === 'en' ? '3–4 naps · 13–16 h per day' : '3–4 siestas · 13–16 h al día' },
@@ -474,14 +485,14 @@
     if (timers.sueno) return `
       <div class="card ventana-card">
         <h2>⏳ Ventana de despierta</h2>
-        <p style="font-size:14px;color:var(--text-2)">Está dormida 😴 — al despertar, su ventana para esta edad es de <b>${v.min}–${v.max} min</b> antes de la siguiente siesta.</p>
+        <p style="font-size:14px;color:var(--text-2)">${I18N.lang === 'en' ? `Asleep 😴 — when she wakes, her awake window at this age is <b>${v.min}–${v.max} min</b> before the next nap.` : `Está dormida 😴 — al despertar, su ventana para esta edad es de <b>${v.min}–${v.max} min</b> antes de la siguiente siesta.`}</p>
       </div>`;
     const ult = Store.data.suenos.filter(s => s.fin && s.tipo !== 'vigilia')
       .sort((a, b) => b.fin.localeCompare(a.fin))[0];
     if (!ult) return `
       <div class="card ventana-card">
         <h2>⏳ Ventana de despierta</h2>
-        <p style="font-size:14px;color:var(--text-2)">A su edad aguanta despierta <b>${v.min}–${v.max} min</b> entre sueños (${v.siestas}). Registra sus sueños y aquí verás cuándo se acerca su hora.</p>
+        <p style="font-size:14px;color:var(--text-2)">${I18N.lang === 'en' ? `At her age she can stay awake <b>${v.min}–${v.max} min</b> between sleeps (${v.siestas}). Log her sleeps and you'll see here when her window is closing.` : `A su edad aguanta despierta <b>${v.min}–${v.max} min</b> entre sueños (${v.siestas}). Registra sus sueños y aquí verás cuándo se acerca su hora.`}</p>
       </div>`;
     const despiertaMin = Math.floor((Date.now() - new Date(ult.fin)) / 60000);
     const pct = Math.min(100, Math.round((despiertaMin / v.max) * 100));
@@ -545,7 +556,7 @@
       return `
         <div class="card" style="border-left:5px solid #7c63d8">
           <h2>🌙 Rutina de dormir</h2>
-          <p style="font-size:13.5px;color:var(--text-2);margin-bottom:12px">La misma secuencia cada noche le enseña al cuerpo de ${esc(Store.data.bebe.nombre || 'la bebé')} que viene el sueño largo. Es lo que más recomiendan los expertos en sueño infantil.</p>
+          <p style="font-size:13.5px;color:var(--text-2);margin-bottom:12px">${I18N.lang === 'en' ? `The same sequence every night teaches ${esc(Store.data.bebe.nombre || 'the baby')}'s body that the long sleep is coming. It's what infant-sleep experts recommend most.` : `La misma secuencia cada noche le enseña al cuerpo de ${esc(Store.data.bebe.nombre || 'la bebé')} que viene el sueño largo. Es lo que más recomiendan los expertos en sueño infantil.`}</p>
           <button class="btn-secondary btn-block" data-accion="rutina-editar">✨ Crear nuestra rutina</button>
         </div>`;
     }
@@ -556,7 +567,7 @@
           <h2 style="margin:0">🌙 Rutina de dormir</h2>
           <button class="btn-ghost" data-accion="rutina-editar">✏️ Editar</button>
         </div>
-        <p style="font-size:13px;color:var(--text-2)">${r.pasos.length} pasos · ~${dur} min${r.hora ? ` · hora objetivo ${r.hora}` : ''}</p>
+        <p style="font-size:13px;color:var(--text-2)">${I18N.lang === 'en' ? `${r.pasos.length} steps · ~${dur} min${r.hora ? ` · target ${r.hora}` : ''}` : `${r.pasos.length} pasos · ~${dur} min${r.hora ? ` · hora objetivo ${r.hora}` : ''}`}</p>
         <p style="font-size:12.5px;color:var(--text-2)">${r.pasos.map(p => p.emoji).join(' → ')}</p>
         <button class="btn-primary btn-block" data-accion="rutina-iniciar" style="margin-top:10px">▶ Empezar rutina de esta noche</button>
       </div>`;
@@ -587,7 +598,7 @@
     };
 
     abrirSheet(`
-      <h2>${r && r.pasos ? 'Editar' : 'Crear'} rutina de dormir 🌙</h2>
+      <h2>${I18N.lang === 'en' ? (r && r.pasos ? 'Edit' : 'Create') + ' bedtime routine 🌙' : (r && r.pasos ? 'Editar' : 'Crear') + ' rutina de dormir 🌙'}</h2>
       <p style="font-size:12.5px;color:var(--text-2);margin-bottom:10px">Consejo: siempre el mismo orden, empezando 30–45 min antes de la hora objetivo, y terminando en la cuna somnolienta pero despierta.</p>
       <div id="re-pasos"></div>
       <div class="form-row" style="margin-top:10px">
@@ -1119,7 +1130,9 @@
 
   function renderPanal() {
     const grupos = porDia(Store.data.panales, 'hora');
-    const nombre = { pipi: 'Pipí', popo: 'Popó', mixto: 'Pipí + Popó' };
+    const nombre = I18N.lang === 'en'
+      ? { pipi: 'Pee', popo: 'Poop', mixto: 'Pee + Poop' }
+      : { pipi: 'Pipí', popo: 'Popó', mixto: 'Pipí + Popó' };
     const emoji = { pipi: '💧', popo: '💩', mixto: '🌊' };
     main.innerHTML = `
       <h2 class="section-title">Pañales</h2>
@@ -1168,7 +1181,7 @@
     const sel = { color: null, cons: null };
 
     abrirSheet(`
-      <h2>${tipo === 'mixto' ? 'Pipí + Popó 🌊' : 'Popó 💩'}</h2>
+      <h2>${I18N.lang === 'en' ? (tipo === 'mixto' ? 'Pee + Poop 🌊' : 'Poop 💩') : (tipo === 'mixto' ? 'Pipí + Popó 🌊' : 'Popó 💩')}</h2>
       <div class="form-group"><label>Color</label>
         <div class="color-picker" id="pp-colores">
           ${COLORES_POPO.map(c => `
@@ -1239,7 +1252,9 @@
       }
       Store.add('panales', { tipo, hora: new Date().toISOString(), color: colorEf, consistencia: consEf, notas: '', fotoId });
       cerrarSheet();
-      toast(`${tipo === 'mixto' ? 'Pañal completo 🌊' : 'Popó 💩'} registrado${fotoPend ? ' con foto 📸' : ''}`);
+      toast(I18N.lang === 'en'
+        ? `${tipo === 'mixto' ? 'Full diaper 🌊' : 'Poop 💩'} logged${fotoPend ? ' with photo 📸' : ''}`
+        : `${tipo === 'mixto' ? 'Pañal completo 🌊' : 'Popó 💩'} registrado${fotoPend ? ' con foto 📸' : ''}`);
       avisoColor(colorEf);
     };
 
@@ -1502,7 +1517,7 @@
         </div>
         <div>
           <h2>${completadas >= total ? '¡Día perfecto! 🌟' : completadas > 0 ? '¡Van muy bien!' : 'Retos de hoy'}</h2>
-          <div class="hero-sub">Etapa: ${info.etapa.nombre} · semana ${sem} de vida</div>
+          <div class="hero-sub">${I18N.lang === 'en' ? `Stage: ${info.etapa.nombre} · week ${sem} of life` : `Etapa: ${info.etapa.nombre} · semana ${sem} de vida`}</div>
           <div class="racha-chip"><span class="flama">🔥</span> ${rachaDias} día${rachaDias === 1 ? '' : 's'} de racha</div>
         </div>
       </div>
@@ -1529,7 +1544,7 @@
         <div class="tarea ${hecha ? 'hecha' : ''}">
           <span class="t-emoji">${t.emoji}</span>
           <div class="t-main">
-            ${t.porCondicion ? `<span class="t-cond">por ${esc(t.porCondicion)}</span><br>` : ''}
+            ${t.porCondicion ? `<span class="t-cond">${I18N.lang === 'en' ? 'for' : 'por'} ${esc(t.porCondicion)}</span><br>` : ''}
             <div class="t-titulo">${esc(t.titulo)}</div>
             <div class="t-desc">${esc(t.desc)}</div>
           </div>
@@ -1564,7 +1579,7 @@
 
   function festejarTarea(t) {
     confeti(50);
-    toast(`${t.emoji} ¡${t.titulo} lista!`);
+    toast(I18N.lang === 'en' ? `${t.emoji} ${t.titulo} done!` : `${t.emoji} ¡${t.titulo} lista!`);
     // ¿día perfecto?
     setTimeout(() => {
       const info = tareasHoy();
@@ -1885,7 +1900,7 @@
       } else if (promSesion && ml < promSesion * 0.6) {
         // sesión floja: ánimo, no números fríos
         celebracion('💗', 'Tranquila, es normal', `Hay sesiones y días con menos leche — no dice nada de ti. Respira, toma agua y date un respiro 🤍`);
-        setTimeout(() => toast(`🥛 +${ml} ml guardados · cada gota cuenta`), 3600);
+        setTimeout(() => toast(I18N.lang === 'en' ? `🥛 +${ml} ml saved · every drop counts` : `🥛 +${ml} ml guardados · cada gota cuenta`), 3600);
       } else {
         toast(`🥛 +${ml} ml al ${lugar === 'congelador' ? 'congelador' : 'refri'}`);
       }
@@ -2117,8 +2132,8 @@
     const conLugar = tipoMov === 'extraccion' || tipoMov === 'descarte';
     abrirSheet(`
       <h2>${titulos[tipoMov]}</h2>
-      ${tipoMov === 'descongelar' ? `<p style="font-size:13px;color:var(--text-2)">Pasa del congelador (${cong} ml) al refri, lista para usar en ~24 h.</p>` : ''}
-      ${tipoMov === 'congelar' ? `<p style="font-size:13px;color:var(--text-2)">Pasa del refri (${refri} ml) al congelador para reserva larga.</p>` : ''}
+      ${tipoMov === 'descongelar' ? `<p style="font-size:13px;color:var(--text-2)">${I18N.lang === 'en' ? `Moves from the freezer (${cong} ml) to the fridge, ready to use in ~24 h.` : `Pasa del congelador (${cong} ml) al refri, lista para usar en ~24 h.`}</p>` : ''}
+      ${tipoMov === 'congelar' ? `<p style="font-size:13px;color:var(--text-2)">${I18N.lang === 'en' ? `Moves from the fridge (${refri} ml) to the freezer for long-term storage.` : `Pasa del refri (${refri} ml) al congelador para reserva larga.`}</p>` : ''}
       <div class="ml-stepper">
         <button type="button" id="ml-menos">−</button>
         <div class="ml-value"><span id="ml-num">60</span> <small>ml</small></div>
@@ -2156,7 +2171,7 @@
     $('#f-guardar').onclick = () => {
       if (!ml) { toast('Pon los mililitros'); return; }
       if (tipoMov === 'descongelar' && ml > cong) { toast(`Solo hay ${cong} ml congelados`); return; }
-      if (tipoMov === 'congelar' && ml > refri) { toast(`Solo hay ${refri} ml en el refri`); return; }
+      if (tipoMov === 'congelar' && ml > refri) { toast(I18N.lang === 'en' ? `Only ${refri} ml in the fridge` : `Solo hay ${refri} ml en el refri`); return; }
       Store.add('banco', { tipo: tipoMov, lugar, ml, fecha: new Date().toISOString(), notas: $('#f-notas').value.trim() });
       cerrarSheet();
       toast('Movimiento guardado 🥛');
@@ -2216,7 +2231,7 @@
       <p style="font-size:14.5px;line-height:1.5;color:var(--text-2);margin-bottom:12px">${esc(e.texto)}</p>
       ${e.alivio ? `<div class="care-box"><h4>💡 Para reducir las molestias</h4><ul>${e.alivio.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>` : ''}
       ${e.compra ? `<div class="info-box" style="margin-top:10px"><h4>🛍️ Consejo de compras</h4>${esc(e.compra)}</div>` : ''}
-      <p class="disclaimer">Aviso por su edad (${Math.floor(dias / 7)} semanas). Guía general — su pediatra siempre manda.</p>
+      <p class="disclaimer">${I18N.lang === 'en' ? `Heads-up for her age (${Math.floor(dias / 7)} weeks). General guidance — her pediatrician always has the final say.` : `Aviso por su edad (${Math.floor(dias / 7)} semanas). Guía general — su pediatra siempre manda.`}</p>
       <button class="btn-primary btn-block" id="etapa-ok" style="margin-top:10px">Entendido 💗</button>
     `);
     $('#etapa-ok').onclick = () => {
@@ -2301,7 +2316,7 @@
             <span class="entry-emoji">🎉</span>
             <div class="entry-main">
               <div class="entry-title">${esc(c.nombre)}</div>
-              <div class="entry-sub">Superada el ${new Date(c.curada).toLocaleDateString(I18N.loc(), { dateStyle: 'long' })}</div>
+              <div class="entry-sub">${I18N.lang === 'en' ? 'Resolved on' : 'Superada el'} ${new Date(c.curada).toLocaleDateString(I18N.loc(), { dateStyle: 'long' })}</div>
             </div>
             <button class="btn-ghost" data-reabrir="${c.id}">Reabrir</button>
           </div>`).join('')}</div></details>` : ''}
@@ -2374,7 +2389,7 @@
     });
     cont.querySelectorAll('[data-curada]').forEach(b => b.onclick = () => {
       const c = Store.data.condiciones.find(x => x.id === b.dataset.curada);
-      if (!c || !confirm(`¿Marcar "${c.nombre}" como superada? Dejará de aparecer en el análisis y los retos.`)) return;
+      if (!c || !confirm(I18N.lang === 'en' ? `Mark "${c.nombre}" as resolved? It will stop appearing in the health check and goals.` : `¿Marcar "${c.nombre}" como superada? Dejará de aparecer en el análisis y los retos.`)) return;
       Store.update('condiciones', c.id, { curada: new Date().toISOString() });
       confeti(100);
       celebracion('🎉', `¡${c.nombre} superada!`, `${Store.data.bebe.nombre || 'La bebé'} lo logró 💪`);
@@ -2423,8 +2438,8 @@
     if (!c) return;
     const m = medId ? c.mediciones.find(x => x.id === medId) : null;
     abrirSheet(`
-      <h2>${m ? 'Editar' : 'Nueva'} medición · ${esc(c.nombre)}</h2>
-      <div class="form-group"><label>Valor ${c.unidad ? `(${esc(c.unidad)})` : ''} — déjalo vacío si aún esperan el resultado</label>
+      <h2>${I18N.lang === 'en' ? (m ? 'Edit' : 'New') + ' reading' : (m ? 'Editar' : 'Nueva') + ' medición'} · ${esc(c.nombre)}</h2>
+      <div class="form-group"><label>${I18N.lang === 'en' ? 'Value' : 'Valor'} ${c.unidad ? `(${esc(c.unidad)})` : ''} — ${I18N.lang === 'en' ? 'leave empty if the result is still pending' : 'déjalo vacío si aún esperan el resultado'}</label>
         <input type="number" step="any" id="f-valor" inputmode="decimal" value="${m && m.valor !== null ? m.valor : ''}" placeholder="Ej. 12">
       </div>
       <div class="form-group"><label>Fecha y hora</label>
@@ -2485,7 +2500,7 @@
 
   function hojaIntervencion(existente) {
     abrirSheet(`
-      <h2>${existente ? 'Editar' : 'Nueva'} intervención 💉</h2>
+      <h2>${I18N.lang === 'en' ? (existente ? 'Edit' : 'New') + ' procedure 💉' : (existente ? 'Editar' : 'Nueva') + ' intervención 💉'}</h2>
       <div class="form-group"><label>¿Qué le hicieron?</label>
         <input type="text" id="f-titulo" value="${esc(existente ? existente.titulo : '')}" placeholder="Le sacaron sangre para bilirrubina">
       </div>
@@ -2798,7 +2813,7 @@
 
   function pedirFotoSemanal(semana) {
     abrirSheet(`
-      <h2>Foto de la semana ${semana} 📸</h2>
+      <h2>${I18N.lang === 'en' ? `Photo of week ${semana} 📸` : `Foto de la semana ${semana} 📸`}</h2>
       <p style="font-size:14px;color:var(--text-2);margin-bottom:14px">
         ${semana === 0 ? 'Su primera semana de vida 💗' : `${semana * 7} días de vida cumplidos`}
         — pueden tomarla ahora o elegir una que ya tengan.
@@ -2955,7 +2970,7 @@
 
       <div class="card">
         <h2>👪 Cuentas de la familia</h2>
-        <p style="font-size:12.5px;color:var(--text-2);margin-bottom:8px">Cuentas enlazadas a ${esc((Store.getBebes()[0] || {}).nombre || 'este bebé')} — cada quien entra con su correo y todo queda firmado con su nombre.</p>
+        <p style="font-size:12.5px;color:var(--text-2);margin-bottom:8px">${I18N.lang === 'en' ? `Accounts linked to ${esc((Store.getBebes()[0] || {}).nombre || 'this baby')} — everyone signs in with their own email and each entry is signed with their name.` : `Cuentas enlazadas a ${esc((Store.getBebes()[0] || {}).nombre || 'este bebé')} — cada quien entra con su correo y todo queda firmado con su nombre.`}</p>
         ${Store.cuentasDeFamilia().map(c => `
           <div class="measure-row"><span>${c.quien === 'mama' ? '👩' : c.quien === 'papa' ? '👨' : '👤'} ${esc(c.email)}</span>
           <span class="measure-val">${c.quien ? esc(nombreQuien(c.quien)) : ''}</span></div>`).join('') || '<p style="font-size:13px;color:var(--text-2)">Sin cuentas locales</p>'}
@@ -3140,7 +3155,7 @@
       const enPausa = !!timers.toma.pausadoDesde;
       html += `
         <div class="timer-banner" style="${enPausa ? 'opacity:.75' : ''}">
-          <div class="timer-info">🤱 ${timers.toma.lado === 'izq' ? 'Izquierda' : 'Derecha'}${enPausa ? ' · en pausa' : ''}
+          <div class="timer-info">🤱 ${timers.toma.lado === 'izq' ? (I18N.lang === 'en' ? 'Left' : 'Izquierda') : (I18N.lang === 'en' ? 'Right' : 'Derecha')}${enPausa ? (I18N.lang === 'en' ? ' · paused' : ' · en pausa') : ''}
             <span class="timer-clock">${fmtDur(seg)}</span></div>
           <div>
             <button data-accion="toma-cancelar">✕</button>
@@ -3365,7 +3380,10 @@
     let sub = fmtFechaLarga(new Date());
     if (d.bebe.nacimiento) {
       const dias = Math.floor((Date.now() - new Date(`${d.bebe.nacimiento}T${d.bebe.hora || '00:00'}`)) / 86400000);
-      sub += dias < 60 ? ` · ${dias} días de vida 💗` : ` · ${Math.floor(dias / 7)} semanas 💗`;
+      const enH = I18N.lang === 'en';
+      sub += dias < 60
+        ? (enH ? ` · ${dias} day${dias === 1 ? '' : 's'} old 💗` : ` · ${dias} días de vida 💗`)
+        : (enH ? ` · ${Math.floor(dias / 7)} weeks 💗` : ` · ${Math.floor(dias / 7)} semanas 💗`);
     }
     $('#header-sub').textContent = sub;
   }
@@ -3465,11 +3483,11 @@
       `UID:${c.id}@maya.app`,
       `DTSTART:${fechaICS(c.fecha)}`,
       `DTEND:${fechaICS(new Date(new Date(c.fecha).getTime() + 3600000))}`,
-      `SUMMARY:${(c.titulo || 'Cita médica').replace(/[,;]/g, ' ')} · ${Store.data.bebe.nombre || 'bebé'}`,
+      `SUMMARY:${(c.titulo || (I18N.lang === 'en' ? 'Appointment' : 'Cita médica')).replace(/[,;]/g, ' ')} · ${Store.data.bebe.nombre || 'bebé'}`,
       c.lugar ? `LOCATION:${c.lugar.replace(/[,;]/g, ' ')}` : '',
       c.notas ? `DESCRIPTION:${c.notas.replace(/[,;\n]/g, ' ')}` : '',
-      'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:Cita mañana', 'END:VALARM',
-      'BEGIN:VALARM', 'TRIGGER:-PT1H', 'ACTION:DISPLAY', 'DESCRIPTION:Cita en 1 hora', 'END:VALARM',
+      'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', `DESCRIPTION:${I18N.lang === 'en' ? 'Appointment tomorrow' : 'Cita mañana'}`, 'END:VALARM',
+      'BEGIN:VALARM', 'TRIGGER:-PT1H', 'ACTION:DISPLAY', `DESCRIPTION:${I18N.lang === 'en' ? 'Appointment in 1 hour' : 'Cita en 1 hora'}`, 'END:VALARM',
       'END:VEVENT'].filter(Boolean).join('\r\n');
   }
 
@@ -3483,7 +3501,7 @@
       `DTEND:${fechaICS(new Date(inicio.getTime() + 600000))}`,
       'RRULE:FREQ=DAILY',
       `SUMMARY:💊 ${m.nombre.replace(/[,;]/g, ' ')}${m.dosis ? ` (${m.dosis.replace(/[,;]/g, ' ')})` : ''} · ${Store.data.bebe.nombre || 'bebé'}`,
-      'BEGIN:VALARM', 'TRIGGER:PT0M', 'ACTION:DISPLAY', 'DESCRIPTION:Hora del medicamento', 'END:VALARM',
+      'BEGIN:VALARM', 'TRIGGER:PT0M', 'ACTION:DISPLAY', `DESCRIPTION:${I18N.lang === 'en' ? 'Medication time' : 'Hora del medicamento'}`, 'END:VALARM',
       'END:VEVENT'].join('\r\n');
   }
 
@@ -3563,16 +3581,17 @@
     const respuestas = [];
     let i = 0;
 
+    const en = I18N.lang === 'en';
     const pintar = () => {
       const q = EPDS.PREGUNTAS[i];
       $('#sheet-content').innerHTML = `
-        <h2>Sobre ti 💚</h2>
-        <p style="font-size:12.5px;color:var(--text-2)">En los últimos 7 días… · pregunta ${i + 1} de 10</p>
+        <h2>${en ? 'About you 💚' : 'Sobre ti 💚'}</h2>
+        <p style="font-size:12.5px;color:var(--text-2)">${en ? `In the past 7 days… · question ${i + 1} of 10` : `En los últimos 7 días… · pregunta ${i + 1} de 10`}</p>
         <div class="rutina-progreso"><div style="width:${Math.round((i / 10) * 100)}%"></div></div>
         <p style="font-size:16.5px;font-weight:800;margin:10px 0 14px">${esc(q.texto)}</p>
         ${q.ops.map(([txt, val], j) => `
           <button class="epds-op" data-val="${val}">${esc(txt)}</button>`).join('')}
-        <p class="disclaimer">Tus respuestas solo se guardan en TU teléfono; no se suben a la nube ni las ve nadie más.</p>
+        <p class="disclaimer">${en ? 'Your answers are saved only on YOUR phone; they are never uploaded and no one else sees them.' : 'Tus respuestas solo se guardan en TU teléfono; no se suben a la nube ni las ve nadie más.'}</p>
       `;
       document.querySelectorAll('.epds-op').forEach(b => b.onclick = () => {
         respuestas.push(Number(b.dataset.val));
@@ -3587,7 +3606,9 @@
       const q10 = respuestas[9];
       EPDS.guardarResultado(total, q10);
       const nivel = EPDS.interpretar(total, q10);
-      const nombre = esc(Store.data.bebe.mama || 'mamá');
+      const nombre = esc(Store.data.bebe.mama || (en ? 'mom' : 'mamá'));
+      const beb = esc(Store.data.bebe.nombre || (en ? 'the baby' : 'la bebé'));
+      const pareja = esc(Store.data.bebe.papa || (en ? 'your partner' : 'tu pareja'));
       const recursos = EPDS.RECURSOS.map(r => `
         <a class="epds-recurso" href="${r.url}" target="_blank" rel="noopener">${r.emoji} ${esc(r.texto)}</a>`).join('');
 
@@ -3596,48 +3617,48 @@
         cuerpo = `
           <div class="analisis-estado" style="background:linear-gradient(135deg,#e25555,#c73e3e)">
             <span class="ae-emoji">🫂</span>
-            <div><div class="ae-titulo">No estás sola, ${nombre}</div>
-            <div class="ae-sub">Indicaste pensamientos de hacerte daño. Eso merece atención HOY, no mañana.</div></div>
+            <div><div class="ae-titulo">${en ? `You are not alone, ${nombre}` : `No estás sola, ${nombre}`}</div>
+            <div class="ae-sub">${en ? 'You noted thoughts of harming yourself. That deserves attention TODAY, not tomorrow.' : 'Indicaste pensamientos de hacerte daño. Eso merece atención HOY, no mañana.'}</div></div>
           </div>
-          <p style="font-size:14.5px;line-height:1.5;margin-bottom:10px">Por favor díselo ahora a ${esc(Store.data.bebe.papa || 'tu pareja')} o a alguien de confianza, y llama a una línea de apoyo — es gratis, es confidencial y ayudan de verdad. Si sientes que puedes hacerte daño en este momento, llama al <b>911</b>.</p>
+          <p style="font-size:14.5px;line-height:1.5;margin-bottom:10px">${en ? `Please tell ${pareja} or someone you trust right now, and call a support line — it's free, confidential and they truly help. If you feel you might harm yourself this very moment, call <b>911</b>.` : `Por favor díselo ahora a ${pareja} o a alguien de confianza, y llama a una línea de apoyo — es gratis, es confidencial y ayudan de verdad. Si sientes que puedes hacerte daño en este momento, llama al <b>911</b>.`}</p>
           ${recursos}`;
       } else if (nivel === 'alto') {
         cuerpo = `
           <div class="analisis-estado" style="background:linear-gradient(135deg,#e2865e,#d06a3f)">
             <span class="ae-emoji">💛</span>
-            <div><div class="ae-titulo">Mereces apoyo, ${nombre}</div>
-            <div class="ae-sub">Puntaje ${total}/30 — sugiere síntomas importantes de depresión posparto.</div></div>
+            <div><div class="ae-titulo">${en ? `You deserve support, ${nombre}` : `Mereces apoyo, ${nombre}`}</div>
+            <div class="ae-sub">${en ? `Score ${total}/30 — suggests meaningful symptoms of postpartum depression.` : `Puntaje ${total}/30 — sugiere síntomas importantes de depresión posparto.`}</div></div>
           </div>
-          <p style="font-size:14.5px;line-height:1.5;margin-bottom:10px">La depresión posparto es <b>muy común</b> (1 de cada 7 mamás) y <b>muy tratable</b>. No es debilidad ni significa que seas mala mamá — es una condición médica, como la ictericia de Maya. El mejor paso es hablar esta semana con un especialista perinatal:</p>
+          <p style="font-size:14.5px;line-height:1.5;margin-bottom:10px">${en ? `Postpartum depression is <b>very common</b> (1 in 7 moms) and <b>very treatable</b>. It's not weakness and it doesn't mean you're a bad mom — it's a medical condition, like ${beb}'s jaundice. The best step is to talk with a perinatal specialist this week:` : `La depresión posparto es <b>muy común</b> (1 de cada 7 mamás) y <b>muy tratable</b>. No es debilidad ni significa que seas mala mamá — es una condición médica, como la ictericia de ${beb}. El mejor paso es hablar esta semana con un especialista perinatal:`}</p>
           ${recursos}`;
       } else if (nivel === 'medio') {
         cuerpo = `
           <div class="analisis-estado" style="background:linear-gradient(135deg,#f5b54a,#e79a1f)">
             <span class="ae-emoji">🌤️</span>
-            <div><div class="ae-titulo">Andas cargando bastante, ${nombre}</div>
-            <div class="ae-sub">Puntaje ${total}/30 — algunos síntomas que vale la pena vigilar.</div></div>
+            <div><div class="ae-titulo">${en ? `You're carrying a lot, ${nombre}` : `Andas cargando bastante, ${nombre}`}</div>
+            <div class="ae-sub">${en ? `Score ${total}/30 — some symptoms worth keeping an eye on.` : `Puntaje ${total}/30 — algunos síntomas que vale la pena vigilar.`}</div></div>
           </div>
-          <div class="care-box"><h4>💚 Esta semana, con intención</h4><ul>
-            <li>Duerme cuando Maya duerma al menos una vez al día; los pendientes esperan.</li>
-            <li>Cuéntale a ${esc(Store.data.bebe.papa || 'tu pareja')} cómo te sientes, con estas palabras.</li>
-            <li>Sal a la luz del día 15 min, aunque sea al patio con la bebé.</li>
-            <li>Volveremos a preguntarte en una semana. Si esto crece, busca apoyo — abajo hay opciones.</li>
+          <div class="care-box"><h4>${en ? '💚 This week, on purpose' : '💚 Esta semana, con intención'}</h4><ul>
+            <li>${en ? `Sleep when ${beb} sleeps at least once a day; the to-dos can wait.` : `Duerme cuando ${beb} duerma al menos una vez al día; los pendientes esperan.`}</li>
+            <li>${en ? `Tell ${pareja} how you feel, using these words.` : `Cuéntale a ${pareja} cómo te sientes, con estas palabras.`}</li>
+            <li>${en ? 'Get 15 min of daylight, even in the yard with the baby.' : 'Sal a la luz del día 15 min, aunque sea al patio con la bebé.'}</li>
+            <li>${en ? "We'll check in again in a week. If this grows, seek support — there are options below." : 'Volveremos a preguntarte en una semana. Si esto crece, busca apoyo — abajo hay opciones.'}</li>
           </ul></div>
           ${recursos}`;
       } else {
         cuerpo = `
           <div class="analisis-estado" style="background:linear-gradient(135deg,#4cc38a,#2ea06d)">
             <span class="ae-emoji">💚</span>
-            <div><div class="ae-titulo">Te ves bien, ${nombre}</div>
-            <div class="ae-sub">Puntaje ${total}/30 — sin señales importantes esta vez.</div></div>
+            <div><div class="ae-titulo">${en ? `You seem well, ${nombre}` : `Te ves bien, ${nombre}`}</div>
+            <div class="ae-sub">${en ? `Score ${total}/30 — no major signs this time.` : `Puntaje ${total}/30 — sin señales importantes esta vez.`}</div></div>
           </div>
-          <p style="font-size:14px;line-height:1.5;color:var(--text-2)">Gracias por tomarte estos 2 minutos. Cuidarte a ti también es cuidar a Maya. Te volveremos a preguntar más adelante — y si un día te sientes distinta, el test siempre está en Más → Bienestar de mamá.</p>`;
+          <p style="font-size:14px;line-height:1.5;color:var(--text-2)">${en ? `Thanks for taking these 2 minutes. Caring for yourself is also caring for ${beb}. We'll ask again later — and if one day you feel different, the test is always in More → Mom's wellbeing.` : `Gracias por tomarte estos 2 minutos. Cuidarte a ti también es cuidar a ${beb}. Te volveremos a preguntar más adelante — y si un día te sientes distinta, el test siempre está en Más → Bienestar de mamá.`}</p>`;
       }
 
       $('#sheet-content').innerHTML = `
         ${cuerpo}
-        <p class="disclaimer">La Escala de Edimburgo es un tamizaje validado, no un diagnóstico; solo un profesional puede diagnosticar. Resultados guardados únicamente en tu teléfono.</p>
-        <button class="btn-primary btn-block" id="epds-cerrar" style="margin-top:10px">Cerrar</button>
+        <p class="disclaimer">${en ? 'The Edinburgh Scale is a validated screening, not a diagnosis; only a professional can diagnose. Results saved only on your phone.' : 'La Escala de Edimburgo es un tamizaje validado, no un diagnóstico; solo un profesional puede diagnosticar. Resultados guardados únicamente en tu teléfono.'}</p>
+        <button class="btn-primary btn-block" id="epds-cerrar" style="margin-top:10px">${en ? 'Close' : 'Cerrar'}</button>
       `;
       $('#epds-cerrar').onclick = cerrarSheet;
     };
@@ -3648,19 +3669,21 @@
 
   function invitarEPDS() {
     if (!$('#sheet').classList.contains('hidden')) return;
-    const nombre = esc(Store.data.bebe.mama || 'mamá');
+    const en = I18N.lang === 'en';
+    const nombre = esc(Store.data.bebe.mama || (en ? 'mom' : 'mamá'));
+    const beb = esc(Store.data.bebe.nombre || (en ? 'the baby' : 'la bebé'));
     abrirSheet(`
       <div style="text-align:center;font-size:50px;margin:4px 0 8px">💚</div>
-      <h2 style="text-align:center">¿Y tú cómo estás, ${nombre}?</h2>
+      <h2 style="text-align:center">${en ? `And how are you, ${nombre}?` : `¿Y tú cómo estás, ${nombre}?`}</h2>
       <p style="font-size:14.5px;line-height:1.5;color:var(--text-2);margin-bottom:14px">
-        Esta app cuida a Maya, pero Maya te necesita bien a ti. Cada cierto tiempo te haremos
-        un chequeo cortito (2 minutos, 10 preguntas) que usan los médicos de todo el mundo
-        para cuidar el ánimo de las mamás. Es privado: solo tú ves las respuestas.</p>
-      <button class="btn-primary btn-block" id="epds-si">Sí, va — 2 minutos 💚</button>
-      <button class="btn-ghost btn-block" id="epds-luego">Ahora no, en unos días</button>
+        ${en
+          ? `This app cares for ${beb}, but ${beb} needs you well too. Every so often we'll do a quick check-in (2 minutes, 10 questions) that doctors worldwide use to look after moms' mood. It's private: only you see the answers.`
+          : `Esta app cuida a ${beb}, pero ${beb} te necesita bien a ti. Cada cierto tiempo te haremos un chequeo cortito (2 minutos, 10 preguntas) que usan los médicos de todo el mundo para cuidar el ánimo de las mamás. Es privado: solo tú ves las respuestas.`}</p>
+      <button class="btn-primary btn-block" id="epds-si">${en ? "Sure — 2 minutes 💚" : 'Sí, va — 2 minutos 💚'}</button>
+      <button class="btn-ghost btn-block" id="epds-luego">${en ? 'Not now, in a few days' : 'Ahora no, en unos días'}</button>
     `);
     $('#epds-si').onclick = () => hojaEPDS();
-    $('#epds-luego').onclick = () => { EPDS.posponer(2); cerrarSheet(); toast('Te pregunto en un par de días 💚'); };
+    $('#epds-luego').onclick = () => { EPDS.posponer(2); cerrarSheet(); toast(en ? "I'll ask again in a couple of days 💚" : 'Te pregunto en un par de días 💚'); };
   }
 
   /* ---------- temas de color ---------- */
@@ -3805,7 +3828,7 @@
     document.querySelectorAll('[data-disp]').forEach(btn => btn.onclick = () => {
       Store.setDispositivo(btn.dataset.disp);
       cerrarSheet();
-      toast(`Teléfono de ${nombreQuien(btn.dataset.disp)} 💗`);
+      toast(I18N.lang === 'en' ? `${nombreQuien(btn.dataset.disp)}'s phone 💗` : `Teléfono de ${nombreQuien(btn.dataset.disp)} 💗`);
     });
   }
 
@@ -3931,6 +3954,7 @@
 
   /* ---------- demo público (?demo=1): datos sintéticos, cero nube ---------- */
   function datosDemo() {
+    const en = I18N.lang === 'en';
     const now = Date.now();
     const DIA = 86400000;
     const iso = ms => new Date(ms).toISOString();
@@ -3972,7 +3996,7 @@
       { id: uid(), fecha: iso(now - 5 * DIA), pesoKg: 4.0, tallaCm: 54, perimetroCm: 36, updatedAt: iso(now) },
     ];
     d.condiciones = [{
-      id: uid(), nombre: 'Ictericia', unidad: 'mg/dL', curada: iso(now - 15 * DIA),
+      id: uid(), nombre: en ? 'Jaundice' : 'Ictericia', unidad: 'mg/dL', curada: iso(now - 15 * DIA),
       mediciones: [
         { id: uid(), valor: 11, fecha: iso(now - 32 * DIA), nota: '' },
         { id: uid(), valor: 8, fecha: iso(now - 28 * DIA), nota: '' },
@@ -3980,13 +4004,13 @@
       ],
       info: null, updatedAt: iso(now),
     }];
-    d.medicamentos = [{ id: uid(), nombre: 'Vitamina D', dosis: '1 ml', frecuencia: '1 vez al día', notas: '', activo: true, inicio: iso(now - 30 * DIA), updatedAt: iso(now) }];
-    d.citas = [{ id: uid(), titulo: 'Control de los 2 meses + vacunas', lugar: 'Clínica pediátrica', fecha: iso(now + 6 * DIA), notas: 'Llevar cartilla', hecha: false, updatedAt: iso(now) }];
+    d.medicamentos = [{ id: uid(), nombre: en ? 'Vitamin D' : 'Vitamina D', dosis: '1 ml', frecuencia: en ? 'Once a day' : '1 vez al día', notas: '', activo: true, inicio: iso(now - 30 * DIA), updatedAt: iso(now) }];
+    d.citas = [{ id: uid(), titulo: en ? '2-month check-up + vaccines' : 'Control de los 2 meses + vacunas', lugar: en ? 'Pediatric clinic' : 'Clínica pediátrica', fecha: iso(now + 6 * DIA), notas: en ? 'Bring health record' : 'Llevar cartilla', hecha: false, updatedAt: iso(now) }];
     d.rutina = { pasos: [
-      { id: 'r1', emoji: '🛁', titulo: 'Baño tibio', min: 10 },
-      { id: 'r2', emoji: '🍼', titulo: 'Última toma con luz baja', min: 15 },
-      { id: 'r3', emoji: '📖', titulo: 'Cuento bajito', min: 5 },
-      { id: 'r4', emoji: '😴', titulo: 'A la cuna somnolienta', min: 1 },
+      { id: 'r1', emoji: '🛁', titulo: en ? 'Warm bath' : 'Baño tibio', min: 10 },
+      { id: 'r2', emoji: '🍼', titulo: en ? 'Last feed with dim light' : 'Última toma con luz baja', min: 15 },
+      { id: 'r3', emoji: '📖', titulo: en ? 'Quiet story' : 'Cuento bajito', min: 5 },
+      { id: 'r4', emoji: '😴', titulo: en ? 'To the crib drowsy' : 'A la cuna somnolienta', min: 1 },
     ], hora: '20:00', updatedAt: iso(now) };
     return d;
   }
@@ -4039,7 +4063,7 @@
     Store.activarDemo(seedDemo);
     const listaDemo = document.createElement('button');
     listaDemo.className = 'demo-liston clickeable';
-    listaDemo.innerHTML = '🧪 DEMO con datos sintéticos · <u>' + (teniaSesionReal ? 'volver a mi cuenta' : 'entrar o crear cuenta') + '</u>';
+    listaDemo.innerHTML = (I18N.lang === 'en' ? '🧪 DEMO with synthetic data · <u>' + (teniaSesionReal ? 'back to my account' : 'sign in or create account') : '🧪 DEMO con datos sintéticos · <u>' + (teniaSesionReal ? 'volver a mi cuenta' : 'entrar o crear cuenta')) + '</u>';
     listaDemo.onclick = () => {
       if (!teniaSesionReal) {
         sessionStorage.setItem('maya.ir-login', '1');

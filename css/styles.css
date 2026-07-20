@@ -963,6 +963,8 @@ canvas.chart { width: 100% !important; }
 .tab.active .tab-icon { transform: scale(1.16) translateY(-1px); }
 .tab .tab-icon { transition: transform .3s var(--spring), filter .2s; }
 .main { padding-bottom: calc(118px + var(--safe-bottom)); }
+/* cuando el listón de demo está visible, deja aire extra para que no tape contenido */
+body:has(.demo-liston) .main { padding-bottom: calc(150px + var(--safe-bottom)); }
 
 /* transición al cambiar de pestaña */
 .main.cambio { animation: vista-in .32s var(--suave); }
