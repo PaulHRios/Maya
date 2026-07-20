@@ -876,3 +876,5 @@ canvas.chart { width: 100% !important; }
   font-size: 11px; font-weight: 800; padding: 5px 14px; border-radius: 100px;
   box-shadow: 0 4px 14px rgba(0,0,0,.25); white-space: nowrap; pointer-events: none;
 }
+.demo-liston.clickeable { pointer-events: auto; cursor: pointer; border: none; }
+.demo-liston.clickeable u { color: #ffd166; text-underline-offset: 2px; }

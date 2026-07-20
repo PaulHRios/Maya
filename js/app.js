@@ -2806,6 +2806,15 @@
       </div>
 
       <div class="card">
+        <h2>👪 Cuentas de la familia</h2>
+        <p style="font-size:12.5px;color:var(--text-2);margin-bottom:8px">Cuentas enlazadas a ${esc((Store.getBebes()[0] || {}).nombre || 'este bebé')} — cada quien entra con su correo y todo queda firmado con su nombre.</p>
+        ${Store.cuentasDeFamilia().map(c => `
+          <div class="measure-row"><span>${c.quien === 'mama' ? '👩' : c.quien === 'papa' ? '👨' : '👤'} ${esc(c.email)}</span>
+          <span class="measure-val">${c.quien ? esc(nombreQuien(c.quien)) : ''}</span></div>`).join('') || '<p style="font-size:13px;color:var(--text-2)">Sin cuentas locales</p>'}
+        <button class="btn-secondary btn-block" id="a-agregar-cuenta" style="margin-top:10px">＋ Agregar cuenta de familiar</button>
+      </div>
+
+      <div class="card">
         <h2>☁️ Sincronización con GitHub</h2>
         <p style="font-size:13px;color:var(--text-2);margin-bottom:12px">
           Para que los dos celulares vean los mismos datos, la app los guarda en un
@@ -2914,8 +2923,43 @@
       fr.readAsText(file);
     };
 
+    $('#a-agregar-cuenta').onclick = () => {
+      let rol = 'papa';
+      abrirSheet(`
+        <h2>Agregar cuenta de familiar 👪</h2>
+        <p style="font-size:13px;color:var(--text-2);margin-bottom:12px">La nueva cuenta entra a ESTA familia con acceso a los mismos datos, y lo que registre quedará firmado con su nombre. (La cuenta vive en este dispositivo; en otro teléfono se crea igual y se conecta la misma nube en Ajustes.)</p>
+        <div class="form-group"><label>Correo del familiar</label>
+          <input type="text" id="fc-email" inputmode="email" autocapitalize="none" placeholder="familiar@correo.com">
+        </div>
+        <div class="form-group"><label>Contraseña (mínimo 8 caracteres)</label>
+          <input type="password" id="fc-pass" placeholder="••••••••">
+        </div>
+        <div class="form-group"><label>Es</label>
+          <div class="quien-chips" id="fc-rol">
+            <button type="button" data-rol="mama">👩 Mamá</button>
+            <button type="button" class="activo" data-rol="papa">👨 Papá</button>
+          </div>
+        </div>
+        <button class="btn-primary btn-block" id="fc-crear">Agregar cuenta</button>
+      `);
+      $('#fc-rol').addEventListener('click', e => {
+        const b = e.target.closest('[data-rol]');
+        if (!b) return;
+        rol = b.dataset.rol;
+        $('#fc-rol').querySelectorAll('button').forEach(x => x.classList.toggle('activo', x === b));
+      });
+      $('#fc-crear').onclick = async () => {
+        const r = await Store.crearCuenta({ email: $('#fc-email').value, pass: $('#fc-pass').value, quien: rol, familia: Store.familiaActiva });
+        if (r.error) { toast(r.error); return; }
+        cerrarSheet();
+        toast('Cuenta agregada 👪');
+        render();
+      };
+    };
+
     $('#a-logout').onclick = () => {
       Store.logout();
+      sessionStorage.setItem('maya.ir-login', '1');
       location.reload();
     };
   }
@@ -3596,6 +3640,55 @@
     });
   })();
 
+  function hojaCrearCuenta() {
+    let rol = 'mama';
+    abrirSheet(`
+      <h2>Crear cuenta nueva ✨</h2>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Se crea una familia nueva con su propio bebé y registro completo. Los datos viven en este dispositivo; en Ajustes podrás conectar tu propia nube (repositorio privado de GitHub) para sincronizar con tu pareja.</p>
+      <div class="form-group"><label>Tu correo</label>
+        <input type="text" id="cc-email" inputmode="email" autocapitalize="none" placeholder="tu@correo.com">
+      </div>
+      <div class="form-group"><label>Contraseña (mínimo 8 caracteres)</label>
+        <input type="password" id="cc-pass" placeholder="••••••••">
+      </div>
+      <div class="form-group"><label>Nombre de tu bebé</label>
+        <input type="text" id="cc-bebe" placeholder="Nombre del bebé">
+      </div>
+      <div class="form-group"><label>Tú eres</label>
+        <div class="quien-chips" id="cc-rol">
+          <button type="button" class="activo" data-rol="mama">👩 Mamá</button>
+          <button type="button" data-rol="papa">👨 Papá</button>
+        </div>
+      </div>
+      <button class="btn-primary btn-block" id="cc-crear">Crear mi cuenta</button>
+    `);
+    $('#cc-rol').addEventListener('click', e => {
+      const b = e.target.closest('[data-rol]');
+      if (!b) return;
+      rol = b.dataset.rol;
+      $('#cc-rol').querySelectorAll('button').forEach(x => x.classList.toggle('activo', x === b));
+    });
+    $('#cc-crear').onclick = async () => {
+      const email = $('#cc-email').value;
+      const pass = $('#cc-pass').value;
+      const bebe = $('#cc-bebe').value.trim();
+      if (!bebe) { toast('Ponle nombre a tu bebé'); return; }
+      const r = await Store.crearCuenta({ email, pass, quien: rol, nombreBebe: bebe });
+      if (r.error) { toast(r.error); return; }
+      await Store.login(email, pass);
+      cerrarSheet();
+      $('#login-screen').classList.add('hidden');
+      iniciarApp();
+      confeti(90);
+      celebracion('👶', `¡Bienvenido ${bebe}!`, 'Su registro está listo — a llenar de recuerdos');
+    };
+  }
+
+  const btnCrear = $('#btn-crear-cuenta');
+  if (btnCrear) btnCrear.onclick = hojaCrearCuenta;
+  const btnDemo = $('#btn-ver-demo');
+  if (btnDemo) btnDemo.onclick = () => { location.href = `${location.pathname}?demo=1`; };
+
   $('#login-form').addEventListener('submit', async e => {
     e.preventDefault();
     const ok = await Store.login($('#login-user').value, $('#login-pass').value);
@@ -3675,11 +3768,22 @@
     return d;
   }
 
-  if (new URLSearchParams(location.search).has('demo')) {
+  const paramsURL = new URLSearchParams(location.search);
+  const quiereLogin = paramsURL.has('login') || sessionStorage.getItem('maya.ir-login') === '1';
+  sessionStorage.removeItem('maya.ir-login');
+  const teniaSesionReal = Store.hasSession();
+  if (paramsURL.has('demo') || (!teniaSesionReal && !quiereLogin)) {
     Store.activarDemo(datosDemo());
-    const listaDemo = document.createElement('div');
-    listaDemo.className = 'demo-liston';
-    listaDemo.textContent = '🧪 DEMO · synthetic data — nothing is saved to any server';
+    const listaDemo = document.createElement('button');
+    listaDemo.className = 'demo-liston clickeable';
+    listaDemo.innerHTML = '🧪 DEMO con datos sintéticos · <u>' + (teniaSesionReal ? 'volver a mi cuenta' : 'entrar o crear cuenta') + '</u>';
+    listaDemo.onclick = () => {
+      if (!teniaSesionReal) {
+        sessionStorage.setItem('maya.ir-login', '1');
+        localStorage.removeItem('maya.session.v1');
+      }
+      location.href = location.pathname;
+    };
     document.body.appendChild(listaDemo);
   }
 

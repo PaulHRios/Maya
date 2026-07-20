@@ -87,17 +87,22 @@ const Store = (() => {
     const credencial = `${user.trim().toLowerCase()}|${pass}`;
     const h = await sha256(credencial);
     const cuenta = CUENTAS.find(c => c.hash === h);
-    if (!cuenta) return false;
-    localStorage.setItem(LS_SESSION, 'ok');
-
-    // la cuenta define quién es (para firmar lo que registre en este teléfono)
-    if (cuenta.quien) setDispositivo(cuenta.quien);
+    if (!cuenta) {
+      // cuentas locales creadas en este dispositivo (otras familias)
+      const local = cuentasLocales().find(c => c.email === user.trim().toLowerCase());
+      if (!local) return false;
+      const { hash } = await hashPass(pass, local.salt);
+      if (hash !== local.hash) return false;
+      iniciarSesionFamilia(local.familia, local.quien, local.email);
+      return true;
+    }
+    iniciarSesionFamilia('maya', cuenta.quien, user.trim().toLowerCase());
 
     // dejar lista la sincronización sin que haya que configurar nada.
     // Si la app trae un token embebido más nuevo (SYNC_EMBED.v), se adopta
     // al iniciar sesión: así basta cerrar y abrir sesión tras una rotación.
     try {
-      const raw = localStorage.getItem(LS_CONFIG);
+      const raw = localStorage.getItem(kConfig());
       if (raw) config = Object.assign(config, JSON.parse(raw));
       if (!config.token || (config.tokenV || 0) < (SYNC_EMBED.v || 1)) {
         const token = await descifrarToken(credencial, cuenta);
@@ -113,7 +118,78 @@ const Store = (() => {
     return true;
   }
   const hasSession = () => localStorage.getItem(LS_SESSION) === 'ok';
-  const logout = () => localStorage.removeItem(LS_SESSION);
+  const logout = () => { localStorage.removeItem(LS_SESSION); localStorage.removeItem(LS_SESION_ACTIVA); };
+
+  /* ---------- familias y cuentas locales (creadas en el dispositivo) ----------
+     La familia original ('maya') usa las cuentas integradas de arriba con su
+     nube preconfigurada. Las familias nuevas se crean aquí: credenciales con
+     PBKDF2 en el dispositivo y datos locales, con opción de configurar su
+     propia nube (repositorio privado + token) en Ajustes. */
+  const LS_SESION_ACTIVA = 'maya.sesion-activa.v1';
+  const LS_CUENTAS = 'maya.cuentas-locales.v1';
+
+  function sesionActiva() {
+    try { return JSON.parse(localStorage.getItem(LS_SESION_ACTIVA)) || null; }
+    catch { return null; }
+  }
+  const familiaActiva = () => (sesionActiva() && sesionActiva().familia) || 'maya';
+
+  function cuentasLocales() {
+    try { return JSON.parse(localStorage.getItem(LS_CUENTAS)) || []; }
+    catch { return []; }
+  }
+
+  const aB64 = a => btoa(String.fromCharCode(...new Uint8Array(a)));
+  const deB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+  async function hashPass(pass, saltB64) {
+    const salt = saltB64 ? deB64(saltB64) : crypto.getRandomValues(new Uint8Array(16));
+    const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' }, material, 256);
+    return { salt: aB64(salt), hash: aB64(bits) };
+  }
+
+  async function crearCuenta({ email, pass, quien, familia, nombreBebe }) {
+    email = (email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Correo no válido' };
+    if ((pass || '').length < 8) return { error: 'La contraseña necesita al menos 8 caracteres' };
+    const cuentas = cuentasLocales();
+    if (cuentas.some(c => c.email === email)) return { error: 'Ese correo ya tiene cuenta en este dispositivo' };
+    const esNueva = !familia;
+    if (esNueva) {
+      familia = uid();
+      const bebeId = uid();
+      const lista = getBebesGlobal();
+      lista.push({ id: bebeId, nombre: nombreBebe || 'Bebé', familia, updatedAt: now() });
+      guardarBebes(lista);
+      const nuevo = emptyData();
+      nuevo.bebe.nombre = nombreBebe || 'Bebé';
+      localStorage.setItem(kData(bebeId), JSON.stringify(nuevo));
+    }
+    const { salt, hash } = await hashPass(pass);
+    cuentas.push({ email, salt, hash, quien: quien || '', familia, creada: now() });
+    localStorage.setItem(LS_CUENTAS, JSON.stringify(cuentas));
+    return { ok: true, familia };
+  }
+
+  function cuentasDeFamilia() {
+    const f = familiaActiva();
+    const propias = cuentasLocales().filter(c => c.familia === f).map(c => ({ email: c.email, quien: c.quien }));
+    if (f === 'maya') return [{ email: 'papá (integrada)', quien: 'papa' }, { email: 'mamá (integrada)', quien: 'mama' }, ...propias];
+    return propias;
+  }
+
+  function iniciarSesionFamilia(familia, quien, email) {
+    localStorage.setItem(LS_SESION_ACTIVA, JSON.stringify({ familia, quien: quien || '', email: email || '' }));
+    localStorage.setItem(LS_SESSION, 'ok');
+    if (quien) setDispositivo(quien);
+    // aterrizar en un bebé de esta familia
+    const propios = getBebes();
+    if (propios.length && !propios.some(b => b.id === bebeActivo)) {
+      bebeActivo = propios[0].id;
+      localStorage.setItem(LS_BEBE_ACTIVO, bebeActivo);
+    }
+  }
 
   /* ---------- varios bebés (hasta 5) ----------
      Cada bebé tiene su propio archivo de datos, timers y avatar.
@@ -137,23 +213,27 @@ const Store = (() => {
   const kTimers = id => id === 'maya' ? LS_TIMERS : `${LS_TIMERS}.${id}`;
   const archivoDatos = id => id === 'maya' ? 'datos/maya.json' : `datos/bebe-${id}.json`;
 
+  function getBebesGlobal() {
+    try { return JSON.parse(localStorage.getItem(LS_BEBES)) || []; }
+    catch { return []; }
+  }
+
   function getBebes() {
     if (modoDemo) return [{ id: 'demo', nombre: (data.bebe && data.bebe.nombre) || 'Emma', updatedAt: '' }];
-    try {
-      const lista = JSON.parse(localStorage.getItem(LS_BEBES)) || [];
-      if (!lista.some(b => b.id === 'maya')) lista.unshift({ id: 'maya', nombre: 'Maya', updatedAt: '' });
-      return lista;
-    } catch { return [{ id: 'maya', nombre: 'Maya', updatedAt: '' }]; }
+    const f = familiaActiva();
+    const lista = getBebesGlobal().filter(b => (b.familia || 'maya') === f);
+    if (f === 'maya' && !lista.some(b => b.id === 'maya')) lista.unshift({ id: 'maya', nombre: 'Maya', familia: 'maya', updatedAt: '' });
+    return lista;
   }
   function guardarBebes(lista) { localStorage.setItem(LS_BEBES, JSON.stringify(lista)); }
 
   function actualizarPerfilActivo() {
     if (modoDemo) return; // el demo nunca escribe perfiles reales
-    const lista = getBebes();
+    const lista = getBebesGlobal();
     const p = lista.find(b => b.id === bebeActivo);
     const nombre = (data.bebe && data.bebe.nombre) || 'Bebé';
     if (p && p.nombre !== nombre) { p.nombre = nombre; p.updatedAt = now(); guardarBebes(lista); }
-    else if (!p) { lista.push({ id: bebeActivo, nombre, updatedAt: now() }); guardarBebes(lista); }
+    else if (!p && bebeActivo !== 'demo') { lista.push({ id: bebeActivo, nombre, familia: familiaActiva(), updatedAt: now() }); guardarBebes(lista); }
   }
 
   function cambiarBebe(id) {
@@ -169,10 +249,10 @@ const Store = (() => {
 
   function agregarBebe(nombre) {
     if (modoDemo) return null;
-    const lista = getBebes();
-    if (lista.length >= MAX_BEBES) return null;
+    if (getBebes().length >= MAX_BEBES) return null;
     const id = uid();
-    lista.push({ id, nombre, updatedAt: now() });
+    const lista = getBebesGlobal();
+    lista.push({ id, nombre, familia: familiaActiva(), updatedAt: now() });
     guardarBebes(lista);
     const nuevo = emptyData();
     nuevo.bebe.nombre = nombre;
@@ -182,15 +262,20 @@ const Store = (() => {
   }
 
   /* ---------- persistencia local ---------- */
+  const kConfig = () => familiaActiva() === 'maya' ? LS_CONFIG : `${LS_CONFIG}.${familiaActiva()}`;
+
   function loadLocal() {
     try {
       const raw = localStorage.getItem(kData(bebeActivo));
       if (raw) data = Object.assign(emptyData(), JSON.parse(raw));
-      const rawCfg = localStorage.getItem(LS_CONFIG);
+      config = { owner: '', repo: '', branch: 'main', token: '', autoSync: true, lastSync: null };
+      const rawCfg = localStorage.getItem(kConfig());
       if (rawCfg) config = Object.assign(config, JSON.parse(rawCfg));
-      // configuraciones guardadas con versiones viejas pueden traer campos vacíos
-      if (!config.owner) config.owner = SYNC_EMBED.owner;
-      if (!config.repo) config.repo = SYNC_EMBED.repo;
+      if (familiaActiva() === 'maya') {
+        // la familia original trae su nube preconfigurada
+        if (!config.owner) config.owner = SYNC_EMBED.owner;
+        if (!config.repo) config.repo = SYNC_EMBED.repo;
+      }
     } catch (e) { console.error('Error cargando datos locales', e); }
   }
 
@@ -202,7 +287,7 @@ const Store = (() => {
   }
 
   function saveConfig() {
-    localStorage.setItem(LS_CONFIG, JSON.stringify(config));
+    localStorage.setItem(kConfig(), JSON.stringify(config));
   }
 
   // un error al refrescar la vista nunca debe impedir que se guarden los datos
@@ -438,8 +523,9 @@ const Store = (() => {
           const prev = porId.get(p.id);
           if (!prev || (p.updatedAt || '') > (prev.updatedAt || '')) porId.set(p.id, p);
         });
-        const fusion = [...porId.values()];
-        guardarBebes(fusion);
+        const fusion = [...porId.values()].map(p => ({ ...p, familia: p.familia || familiaActiva() }));
+        const otras = getBebesGlobal().filter(b => (b.familia || 'maya') !== familiaActiva());
+        guardarBebes([...otras, ...fusion]);
         const json = JSON.stringify(fusion, null, 1);
         if (!pf || b64decodeUtf8(pf.content) !== json) {
           await ghPutFile('datos/perfiles.json', b64encodeUtf8(json), pf ? pf.sha : null, 'Perfiles de bebés');
@@ -471,6 +557,8 @@ const Store = (() => {
     marcarActividad, fetchAvatar, getAvatarCache,
     getDispositivo, setDispositivo,
     getBebes, cambiarBebe, agregarBebe, activarDemo,
+    crearCuenta, cuentasDeFamilia,
+    get familiaActiva() { return familiaActiva(); },
     get modoDemo() { return modoDemo; },
     get bebeActivo() { return bebeActivo; },
     getTimers, setTimers,
