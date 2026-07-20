@@ -97,7 +97,7 @@ const Analisis = (() => {
     }
 
     /* ---- condiciones: resultados pendientes y mediciones al alza ---- */
-    for (const c of data.condiciones || []) {
+    for (const c of (data.condiciones || []).filter(x => !x.curada)) {
       const meds = [...(c.mediciones || [])].sort((a, b) => a.fecha.localeCompare(b.fecha));
       const pendiente = meds.find(m => m.valor === null || m.valor === '');
       if (pendiente) {

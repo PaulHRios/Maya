@@ -62,6 +62,7 @@ const Store = (() => {
     fotos: [],        // {id, fecha, titulo, archivo, dataUrl?, sincronizada, semana?, updatedAt}
     actividades: [],  // {id, fecha: 'YYYY-MM-DD', tarea, titulo, hecha, duracionSeg, updatedAt}
     banco: [],        // movimientos de leche {id, tipo, lugar, ml, fecha, notas, tomaId?, updatedAt}
+    citas: [],        // citas médicas {id, titulo, lugar, fecha, notas, hecha, updatedAt}
     rutina: null,     // rutina de dormir {pasos:[{id, emoji, titulo, min}], hora, updatedAt}
     borrados: [],     // tombstones {col, id, at}
   });
@@ -121,12 +122,23 @@ const Store = (() => {
   const LS_BEBE_ACTIVO = 'maya.bebe-activo.v1';
   const MAX_BEBES = 5;
 
+  let modoDemo = false;
   let bebeActivo = localStorage.getItem(LS_BEBE_ACTIVO) || 'maya';
+
+  function activarDemo(seed) {
+    modoDemo = true;
+    bebeActivo = 'demo';                     // claves propias: jamás toca datos reales
+    localStorage.setItem(LS_SESSION, 'ok');  // el demo entra directo
+    if (!localStorage.getItem(kData('demo')) && seed) {
+      localStorage.setItem(kData('demo'), JSON.stringify(seed));
+    }
+  }
   const kData = id => id === 'maya' ? LS_DATA : `${LS_DATA}.${id}`;
   const kTimers = id => id === 'maya' ? LS_TIMERS : `${LS_TIMERS}.${id}`;
   const archivoDatos = id => id === 'maya' ? 'datos/maya.json' : `datos/bebe-${id}.json`;
 
   function getBebes() {
+    if (modoDemo) return [{ id: 'demo', nombre: (data.bebe && data.bebe.nombre) || 'Emma', updatedAt: '' }];
     try {
       const lista = JSON.parse(localStorage.getItem(LS_BEBES)) || [];
       if (!lista.some(b => b.id === 'maya')) lista.unshift({ id: 'maya', nombre: 'Maya', updatedAt: '' });
@@ -136,6 +148,7 @@ const Store = (() => {
   function guardarBebes(lista) { localStorage.setItem(LS_BEBES, JSON.stringify(lista)); }
 
   function actualizarPerfilActivo() {
+    if (modoDemo) return; // el demo nunca escribe perfiles reales
     const lista = getBebes();
     const p = lista.find(b => b.id === bebeActivo);
     const nombre = (data.bebe && data.bebe.nombre) || 'Bebé';
@@ -155,6 +168,7 @@ const Store = (() => {
   }
 
   function agregarBebe(nombre) {
+    if (modoDemo) return null;
     const lista = getBebes();
     if (lista.length >= MAX_BEBES) return null;
     const id = uid();
@@ -198,7 +212,7 @@ const Store = (() => {
   function onChange(fn) { listeners.push(fn); }
 
   /* ---------- CRUD genérico ---------- */
-  const COLS = ['tomas', 'suenos', 'panales', 'condiciones', 'intervenciones', 'medicamentos', 'crecimiento', 'fotos', 'actividades', 'banco'];
+  const COLS = ['tomas', 'suenos', 'panales', 'condiciones', 'intervenciones', 'medicamentos', 'crecimiento', 'fotos', 'actividades', 'banco', 'citas'];
 
   function add(col, item) {
     item.id = item.id || uid();
@@ -338,7 +352,7 @@ const Store = (() => {
     return res.json();
   }
 
-  const canSync = () => !!(config.token && config.owner && config.repo);
+  const canSync = () => !modoDemo && !!(config.token && config.owner && config.repo);
 
   function setSyncState(s) {
     syncState = s;
@@ -456,7 +470,8 @@ const Store = (() => {
     add, update, remove, onChange,
     marcarActividad, fetchAvatar, getAvatarCache,
     getDispositivo, setDispositivo,
-    getBebes, cambiarBebe, agregarBebe,
+    getBebes, cambiarBebe, agregarBebe, activarDemo,
+    get modoDemo() { return modoDemo; },
     get bebeActivo() { return bebeActivo; },
     getTimers, setTimers,
     syncNow, scheduleSync, testConnection, canSync, fetchPhoto,

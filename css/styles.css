@@ -868,3 +868,11 @@ canvas.chart { width: 100% !important; }
   padding: 13px 15px; margin-bottom: 8px; box-shadow: var(--shadow);
   font-size: 14px; font-weight: 700; color: var(--text); text-decoration: none;
 }
+
+/* listón del demo público */
+.demo-liston {
+  position: fixed; bottom: calc(74px + var(--safe-bottom)); left: 50%; transform: translateX(-50%);
+  z-index: 25; background: #2b2330; color: #ffd166;
+  font-size: 11px; font-weight: 800; padding: 5px 14px; border-radius: 100px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.25); white-space: nowrap; pointer-events: none;
+}

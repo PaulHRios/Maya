@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Maya — the baby tracker one family built for their newborn</title>
+<meta name="description" content="A privacy-first PWA baby tracker: feeding timers, diapers with AI photo analysis, milk bank, sleep routines, stage guidance and mom's wellbeing checks.">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+  :root {
+    --bg: #fff5f8; --card: #fff; --text: #2b2330; --text2: #8a7f90;
+    --pink: #f06a9b; --deep: #d94f84; --lav: #e9e2ff; --mint: #dff5ea;
+    --shadow: 0 10px 34px rgba(214,110,152,.14);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(160deg, #ffe9f2 0%, #fff5f8 40%, #f3edff 100%);
+    color: var(--text); -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 24px 20px 60px; }
+  .lang {
+    position: fixed; top: 14px; right: 14px; z-index: 10;
+    background: var(--card); border: none; border-radius: 100px;
+    padding: 9px 16px; font-weight: 800; font-size: 13px; cursor: pointer;
+    box-shadow: var(--shadow); color: var(--deep);
+  }
+  .hero { display: flex; align-items: center; gap: 34px; padding: 40px 0 30px; flex-wrap: wrap; }
+  .hero-art { flex: 0 0 260px; margin: 0 auto; }
+  .hero-txt { flex: 1; min-width: 280px; }
+  h1 { font-size: 42px; letter-spacing: -1px; line-height: 1.05; }
+  h1 em { font-style: normal; color: var(--deep); }
+  .tag { font-size: 17px; color: var(--text2); margin: 14px 0 22px; line-height: 1.5; max-width: 46ch; }
+  .cta { display: inline-block; background: linear-gradient(135deg, var(--pink), var(--deep));
+    color: #fff; text-decoration: none; font-weight: 800; font-size: 17px;
+    padding: 16px 26px; border-radius: 18px; box-shadow: var(--shadow); margin: 0 10px 10px 0; }
+  .cta.sec { background: var(--card); color: var(--deep); }
+  .badge { display: inline-block; background: #2b2330; color: #ffd166; border-radius: 100px;
+    font-size: 12px; font-weight: 800; padding: 6px 14px; margin-bottom: 16px; }
+  h2 { font-size: 26px; letter-spacing: -.5px; margin: 40px 0 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(225px, 1fr)); gap: 14px; }
+  .feat { background: var(--card); border-radius: 20px; padding: 18px; box-shadow: var(--shadow); }
+  .feat .fe { font-size: 30px; }
+  .feat b { display: block; margin: 8px 0 4px; font-size: 15.5px; }
+  .feat p { font-size: 13.5px; color: var(--text2); line-height: 1.45; }
+  .priv { background: var(--mint); border-radius: 20px; padding: 20px; margin-top: 34px; font-size: 14.5px; line-height: 1.55; }
+  footer { margin-top: 40px; text-align: center; color: var(--text2); font-size: 13px; line-height: 1.7; }
+  footer a { color: var(--deep); font-weight: 700; }
+  @media (max-width: 620px) { h1 { font-size: 33px; } .hero { padding-top: 24px; gap: 16px; } .hero-art { flex-basis: 200px; } }
+</style>
+</head>
+<body>
+<button class="lang" id="lang">🌐 Español</button>
+<div class="wrap">
+  <section class="hero">
+    <div class="hero-art">
+      <!-- Original illustration made for this project — free of copyright -->
+      <svg viewBox="0 0 260 260" width="100%" role="img" aria-label="Sleeping baby illustration">
+        <circle cx="130" cy="130" r="124" fill="#ffe3ee"/>
+        <circle cx="130" cy="130" r="124" fill="none" stroke="#f8cede" stroke-width="4"/>
+        <path d="M46 178 q84 64 168 0 l0 44 q-84 46 -168 0 z" fill="#c9bcf5"/>
+        <path d="M50 176 q80 58 160 0" fill="none" stroke="#b3a3ef" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="130" cy="118" r="62" fill="#ffe9d6"/>
+        <path d="M96 78 q10 -22 34 -16 q-4 -12 12 -14 q20 -2 22 16 q18 2 12 22 q-22 -12 -40 -8 q-26 4 -40 0z" fill="#8a5a3b"/>
+        <path d="M104 122 q7 7 14 0" fill="none" stroke="#2b2330" stroke-width="3.4" stroke-linecap="round"/>
+        <path d="M142 122 q7 7 14 0" fill="none" stroke="#2b2330" stroke-width="3.4" stroke-linecap="round"/>
+        <circle cx="103" cy="136" r="7" fill="#ffc9d8" opacity=".8"/>
+        <circle cx="157" cy="136" r="7" fill="#ffc9d8" opacity=".8"/>
+        <path d="M124 142 q6 6 12 0" fill="none" stroke="#d98a94" stroke-width="3.2" stroke-linecap="round"/>
+        <path d="M198 66 l6 12 12 3 -12 5 -4 13 -6 -12 -13 -3 12 -5z" fill="#ffd166"/>
+        <circle cx="58" cy="70" r="5" fill="#c9bcf5"/>
+        <circle cx="212" cy="150" r="4" fill="#f06a9b" opacity=".6"/>
+        <path d="M40 120 q4 8 12 8 q-8 2 -12 10 q-3 -8 -11 -10 q8 -1 11 -8z" fill="#fff" opacity=".9"/>
+      </svg>
+    </div>
+    <div class="hero-txt">
+      <span class="badge" data-i="badge">Built for OpenAI Build Week 2026</span>
+      <h1 data-i="h1">The baby tracker <em>one family built</em> for their newborn</h1>
+      <p class="tag" data-i="tag">Maya started as two exhausted new parents logging night feeds. It grew into a full
+        privacy-first PWA: feeding timers, diaper photo analysis, a milk bank with live tank,
+        sleep routines, stage-by-stage guidance — and a wellbeing check for mom.</p>
+      <a class="cta" href="index.html?demo=1" data-i="cta1">▶ Launch interactive demo</a>
+      <a class="cta sec" href="https://github.com/PaulHRios/Maya" data-i="cta2">View source on GitHub</a>
+      <p style="font-size:12px;color:var(--text2);margin-top:10px" data-i="note">
+        The demo runs entirely in your browser with synthetic data ("baby Emma"). Nothing is uploaded anywhere.
+        Note: the product UI is in Spanish — built for a real Mexican family.</p>
+    </div>
+  </section>
+
+  <h2 data-i="ft">Everything a newborn's first months need</h2>
+  <div class="grid">
+    <div class="feat"><span class="fe">🤱</span><b data-i="f1">Feeding timers</b><p data-i="f1t">Left/right breast timers with pause, expressed milk and formula in ml — synced live between both parents' phones.</p></div>
+    <div class="feat"><span class="fe">💩</span><b data-i="f2">Smart diaper log</b><p data-i="f2t">One-tap logging plus on-device photo analysis that suggests stool color and consistency, with pediatric guidance.</p></div>
+    <div class="feat"><span class="fe">🥛</span><b data-i="f3">Milk bank</b><p data-i="f3t">Fridge and freezer inventory with a live tank gauge. Every bottle fed auto-deducts; pumping sessions add back.</p></div>
+    <div class="feat"><span class="fe">⚡</span><b data-i="f4">Guided pumping</b><p data-i="f4t">Six methods including power pumping and Medela 2-phase, with phase alerts, records, charts and a production coach.</p></div>
+    <div class="feat"><span class="fe">🌙</span><b data-i="f5">Sleep, upgraded</b><p data-i="f5t">Age-based wake windows with a traffic-light gauge, customizable bedtime routines and data-driven sleep tips.</p></div>
+    <div class="feat"><span class="fe">🤖</span><b data-i="f6">Local health analysis</b><p data-i="f6t">Hydration, feeding, weight and condition trends vs. the baby's own baseline — computed on-device, never uploaded.</p></div>
+    <div class="feat"><span class="fe">🗓️</span><b data-i="f7">Stage guidance</b><p data-i="f7t">Heads-up pop-ups as the baby enters each stage: colic season, teething, sleep regression — with relief tips.</p></div>
+    <div class="feat"><span class="fe">🏆</span><b data-i="f8">Daily challenges</b><p data-i="f8t">Age-appropriate stimulation activities (tummy time timers!) with confetti, streaks and a medal shelf.</p></div>
+    <div class="feat"><span class="fe">💚</span><b data-i="f9">Mom's wellbeing</b><p data-i="f9t">Scheduled Edinburgh Postnatal Depression Scale check-ins, private to mom's phone, with real help resources.</p></div>
+    <div class="feat"><span class="fe">📅</span><b data-i="f10">Appointments & meds</b><p data-i="f10t">Medical appointments with native calendar alarms (.ics) and daily medication check-offs with reminders.</p></div>
+    <div class="feat"><span class="fe">📄</span><b data-i="f11">Pediatrician PDF</b><p data-i="f11t">One tap exports charts and tables of any date range — feeds, diapers, sleep, bilirubin curves — for the doctor.</p></div>
+    <div class="feat"><span class="fe">👶</span><b data-i="f12">Up to 5 babies</b><p data-i="f12t">Twins? Each baby gets a full separate record, one tap apart. Four color themes, dark mode included.</p></div>
+  </div>
+
+  <div class="priv" data-i="priv">
+    <b>🔒 Privacy by design.</b> No servers, no accounts database, no analytics. The family's data lives on their
+    phones and syncs through their own private GitHub repository; the sync token ships AES-GCM-encrypted and only
+    decrypts with the family's login. Photo analysis and health insights run 100% on-device.
+  </div>
+
+  <footer>
+    <p data-i="foot">Built with GitHub Pages · vanilla JS PWA · Chart.js · jsPDF — no build step, no backend.<br>
+    Made with love for baby Maya 💗 · <a href="https://github.com/PaulHRios/Maya">github.com/PaulHRios/Maya</a></p>
+  </footer>
+</div>
+
+<script>
+const ES = {
+  badge: 'Construida para OpenAI Build Week 2026',
+  h1: 'La app de bebé que <em>una familia construyó</em> para su recién nacida',
+  tag: 'Maya empezó como dos papás desvelados registrando tomas nocturnas. Creció hasta ser una PWA completa y privada: timers de lactancia, análisis de fotos de pañal, banco de leche, rutinas de sueño, guía por etapas — y un chequeo de bienestar para mamá.',
+  cta1: '▶ Abrir demo interactivo',
+  cta2: 'Ver código en GitHub',
+  note: 'El demo corre completo en tu navegador con datos sintéticos ("bebé Emma"). Nada se sube a ningún lado. La interfaz del producto está en español — se construyó para una familia mexicana real.',
+  ft: 'Todo lo que necesitan los primeros meses',
+  f1: 'Timers de alimentación', f1t: 'Pecho izquierdo/derecho con pausa, leche extraída y fórmula en ml — sincronizado en vivo entre los teléfonos de ambos papás.',
+  f2: 'Pañales inteligentes', f2t: 'Registro de un toque y análisis de foto en el dispositivo que sugiere color y consistencia, con guía pediátrica.',
+  f3: 'Banco de leche', f3t: 'Inventario de refri y congelador con tanque visual. Cada biberón se descuenta solo; las extracciones suman.',
+  f4: 'Extracción guiada', f4t: 'Seis métodos, incluidos power pumping y Medela 2 fases, con avisos, récords, gráficas y una entrenadora de producción.',
+  f5: 'Sueño, mejorado', f5t: 'Ventanas de despierto por edad con semáforo, rutinas de dormir personalizables y consejos basados en sus datos.',
+  f6: 'Análisis local de salud', f6t: 'Hidratación, alimentación, peso y condiciones contra su propia línea base — calculado en el dispositivo, nunca subido.',
+  f7: 'Guía por etapas', f7t: 'Avisos al entrar a cada etapa: cólicos, dientes, regresión del sueño — con consejos para reducir molestias.',
+  f8: 'Retos diarios', f8t: 'Estimulación por edad (¡timer de tummy time!) con confeti, rachas y medallero.',
+  f9: 'Bienestar de mamá', f9t: 'Escala de Edimburgo con calendario de tamizaje, privada en el teléfono de mamá, con recursos de ayuda reales.',
+  f10: 'Citas y medicamentos', f10t: 'Citas médicas con alarmas en el calendario nativo (.ics) y check diario de medicamentos con recordatorios.',
+  f11: 'PDF para el pediatra', f11t: 'Exporta gráficas y tablas de cualquier rango — tomas, pañales, sueño, curvas de bilirrubina — en un toque.',
+  f12: 'Hasta 5 bebés', f12t: '¿Gemelos? Cada bebé con su registro completo, a un toque. Cuatro temas de color, modo oscuro incluido.',
+  priv: '<b>🔒 Privacidad por diseño.</b> Sin servidores, sin base de datos de cuentas, sin analytics. Los datos viven en sus teléfonos y se sincronizan por su propio repositorio privado de GitHub; el token viaja cifrado con AES-GCM y solo se abre con el login de la familia. El análisis de fotos y de salud corre 100% en el dispositivo.',
+  foot: 'Hecha con GitHub Pages · PWA en JS puro · Chart.js · jsPDF — sin build, sin backend.<br>Hecha con amor para la bebé Maya 💗 · <a href="https://github.com/PaulHRios/Maya">github.com/PaulHRios/Maya</a>',
+};
+const EN = {};
+document.querySelectorAll('[data-i]').forEach(el => EN[el.dataset.i] = el.innerHTML);
+let es = false;
+document.getElementById('lang').onclick = () => {
+  es = !es;
+  document.documentElement.lang = es ? 'es' : 'en';
+  document.getElementById('lang').textContent = es ? '🌐 English' : '🌐 Español';
+  document.querySelectorAll('[data-i]').forEach(el => el.innerHTML = (es ? ES : EN)[el.dataset.i] || el.innerHTML);
+};
+</script>
+</body>
+</html>

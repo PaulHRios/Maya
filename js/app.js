@@ -219,7 +219,7 @@
   }
 
   function condicionesResumen() {
-    const conds = Store.data.condiciones;
+    const conds = Store.data.condiciones.filter(c => !c.curada);
     if (!conds.length) return '';
     return `<div class="card condition-card">
       <h2>Seguimiento médico</h2>
@@ -1402,7 +1402,7 @@
   function tareasHoy() {
     const dias = edadDias();
     if (dias === null) return null;
-    return Actividades.tareasDeHoy(dias, Store.data.condiciones, fechaLocal());
+    return Actividades.tareasDeHoy(dias, Store.data.condiciones.filter(c => !c.curada), fechaLocal());
   }
 
   function renderRetos() {
@@ -2132,6 +2132,7 @@
   function renderMas() {
     if (vistaMas === 'banco') return renderBanco();
     if (vistaMas === 'analisis') return renderAnalisis();
+    if (vistaMas === 'citas') return renderCitas();
     if (vistaMas === 'salud') return renderSalud();
     if (vistaMas === 'intervenciones') return renderIntervenciones();
     if (vistaMas === 'medicamentos') return renderMedicamentos();
@@ -2159,6 +2160,7 @@
         </button>`; })()}
         ${item('banco', '🥛', 'bg-blue', 'Banco de leche', (() => { const s = saldosBanco(); return `${s.refri} ml listos · ${s.cong} ml congelados`; })())}
         ${item('salud', '🩺', 'bg-pink', 'Condiciones médicas', d.condiciones.length ? d.condiciones.map(c => c.nombre).join(', ') : 'Ictericia, seguimiento de labs…')}
+        ${item('citas', '📅', 'bg-peach', 'Citas médicas', (() => { const p = Store.data.citas.filter(c => !c.hecha && new Date(c.fecha) >= Date.now() - 3600000).sort((a, b) => a.fecha.localeCompare(b.fecha))[0]; return p ? `Próxima: ${new Date(p.fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} · ${esc(p.titulo)}` : 'Consultas, vacunas y laboratorios'; })())}
         ${item('intervenciones', '💉', 'bg-peach', 'Intervenciones', d.intervenciones.length ? `${d.intervenciones.length} registradas` : 'Toma de sangre, vacunas, estudios…')}
         ${item('medicamentos', '💊', 'bg-mint', 'Medicamentos', d.medicamentos.filter(m => m.activo).length ? `${d.medicamentos.filter(m => m.activo).length} activos` : 'Tratamientos y vitaminas')}
         ${item('crecimiento', '📏', 'bg-blue', 'Crecimiento', d.crecimiento.length ? 'Peso, talla y perímetro' : 'Registra peso y talla')}
@@ -2184,7 +2186,8 @@
 
   /* ---------- Condiciones médicas ---------- */
   function renderSalud() {
-    const conds = Store.data.condiciones;
+    const conds = Store.data.condiciones.filter(c => !c.curada);
+    const curadas = Store.data.condiciones.filter(c => c.curada);
     main.innerHTML = `
       ${volverMas}
       <h2 class="section-title">Condiciones médicas 🩺</h2>
@@ -2192,6 +2195,16 @@
       <div id="conds" style="margin-top:14px">
         ${conds.length ? '' : '<div class="empty-state"><span class="big">🩺</span>Registra una condición (por ejemplo, ictericia) y la app buscará información y cuidados sugeridos.</div>'}
       </div>
+      ${curadas.length ? `<details><summary class="day-label" style="cursor:pointer">Superadas 🎉 (${curadas.length})</summary>
+        <div class="entry-list" style="margin-top:6px">${curadas.map(c => `
+          <div class="entry">
+            <span class="entry-emoji">🎉</span>
+            <div class="entry-main">
+              <div class="entry-title">${esc(c.nombre)}</div>
+              <div class="entry-sub">Superada el ${new Date(c.curada).toLocaleDateString('es-MX', { dateStyle: 'long' })}</div>
+            </div>
+            <button class="btn-ghost" data-reabrir="${c.id}">Reabrir</button>
+          </div>`).join('')}</div></details>` : ''}
     `;
     bindVolver();
     $('#btn-nueva-cond').onclick = hojaNuevaCondicion;
@@ -2206,6 +2219,7 @@
           <h2 style="margin:0">${esc(c.nombre)}</h2>
           <div>
             <button class="btn-ghost" data-medir="${c.id}">＋ Medición</button>
+            <button class="btn-ghost" data-curada="${c.id}" style="color:#2ea06d">✅</button>
             <button class="btn-ghost" data-borrar-cond="${c.id}" style="color:var(--danger)">🗑️</button>
           </div>
         </div>
@@ -2257,6 +2271,17 @@
     cont.querySelectorAll('[data-edit-med]').forEach(b => b.onclick = () => {
       const [cid, mid] = b.dataset.editMed.split(':');
       hojaMedicion(cid, mid);
+    });
+    cont.querySelectorAll('[data-curada]').forEach(b => b.onclick = () => {
+      const c = Store.data.condiciones.find(x => x.id === b.dataset.curada);
+      if (!c || !confirm(`¿Marcar "${c.nombre}" como superada? Dejará de aparecer en el análisis y los retos.`)) return;
+      Store.update('condiciones', c.id, { curada: new Date().toISOString() });
+      confeti(100);
+      celebracion('🎉', `¡${c.nombre} superada!`, `${Store.data.bebe.nombre || 'La bebé'} lo logró 💪`);
+    });
+    main.querySelectorAll('[data-reabrir]').forEach(b => b.onclick = () => {
+      Store.update('condiciones', b.dataset.reabrir, { curada: null });
+      toast('Condición reabierta');
     });
     cont.querySelectorAll('[data-borrar-cond]').forEach(b => b.onclick = () => {
       if (confirm('¿Borrar esta condición y todas sus mediciones?')) {
@@ -2399,6 +2424,21 @@
     main.innerHTML = `
       ${volverMas}
       <h2 class="section-title">Medicamentos 💊</h2>
+      ${(() => {
+        const activos = Store.data.medicamentos.filter(m => m.activo);
+        if (!activos.length) return '';
+        const hoy = fechaLocal();
+        return `<div class="card" style="border-left:5px solid #4cc38a"><h2>Dosis de hoy</h2>` + activos.map(m => {
+          const hecha = Store.data.actividades.some(a => a.fecha === hoy && a.tarea === `med-${m.id}` && a.hecha);
+          return `
+          <div class="rutina-paso ${hecha ? 'hecho' : ''}">
+            <span class="rp-emoji">💊</span>
+            <span class="rp-titulo">${esc(m.nombre)}${m.dosis ? ` · ${esc(m.dosis)}` : ''}</span>
+            <button class="entry-actions" data-ics-med="${m.id}" title="Recordatorio diario" style="background:none;border:none;font-size:16px;cursor:pointer;opacity:.6">🔔</button>
+            <button class="rutina-check ${hecha ? 'lista' : ''}" data-med-check="${m.id}">✓</button>
+          </div>`;
+        }).join('') + `</div>`;
+      })()}
       <button class="btn-primary btn-block" id="btn-nuevo-med">＋ Agregar medicamento</button>
       <div class="entry-list" style="margin-top:14px">
         ${meds.map(m => `
@@ -2414,6 +2454,21 @@
     `;
     bindVolver();
     $('#btn-nuevo-med').onclick = () => hojaMedicamento();
+    main.querySelectorAll('[data-med-check]').forEach(b => b.onclick = () => {
+      const m = Store.data.medicamentos.find(x => x.id === b.dataset.medCheck);
+      if (!m) return;
+      const hoy = fechaLocal();
+      const hecha = Store.data.actividades.some(a => a.fecha === hoy && a.tarea === `med-${m.id}` && a.hecha);
+      Store.marcarActividad(hoy, `med-${m.id}`, `Dosis: ${m.nombre}`, !hecha);
+      if (!hecha) { confeti(30); toast(`💊 ${m.nombre} ✓`); }
+    });
+    main.querySelectorAll('[data-ics-med]').forEach(b => b.onclick = () => {
+      const m = Store.data.medicamentos.find(x => x.id === b.dataset.icsMed);
+      if (!m) return;
+      const hora = prompt('¿A qué hora quieres el recordatorio diario? (HH:MM)', '09:00');
+      if (!hora || !/^\d{1,2}:\d{2}$/.test(hora.trim())) return;
+      descargarICS(`medicamento-${m.nombre.slice(0, 20)}`, icsMedicamento(m, hora.trim()));
+    });
   }
 
   function hojaMedicamento(existente) {
@@ -3051,6 +3106,7 @@
       if (col === 'intervenciones') hojaIntervencion(item);
       if (col === 'medicamentos') hojaMedicamento(item);
       if (col === 'crecimiento') hojaCrecimiento(item);
+      if (col === 'citas') hojaCita(item);
       return;
     }
 
@@ -3151,6 +3207,116 @@
     else if (tabActual === 'panal') renderPanal();
     else if (tabActual === 'retos') renderRetos();
     else renderMas();
+  }
+
+  /* ---------- calendario nativo (.ics con alarma) ---------- */
+  function descargarICS(nombre, vevent) {
+    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Maya//ES', vevent, 'END:VCALENDAR'].join('\r\n');
+    const blob = new Blob([ics], { type: 'text/calendar' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${nombre}.ics`;
+    a.click();
+    toast('📅 Ábrelo para agregarlo a tu calendario con alarma');
+  }
+  const fechaICS = d => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+
+  function icsCita(c) {
+    return ['BEGIN:VEVENT',
+      `UID:${c.id}@maya.app`,
+      `DTSTART:${fechaICS(c.fecha)}`,
+      `DTEND:${fechaICS(new Date(new Date(c.fecha).getTime() + 3600000))}`,
+      `SUMMARY:${(c.titulo || 'Cita médica').replace(/[,;]/g, ' ')} · ${Store.data.bebe.nombre || 'bebé'}`,
+      c.lugar ? `LOCATION:${c.lugar.replace(/[,;]/g, ' ')}` : '',
+      c.notas ? `DESCRIPTION:${c.notas.replace(/[,;\n]/g, ' ')}` : '',
+      'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:Cita mañana', 'END:VALARM',
+      'BEGIN:VALARM', 'TRIGGER:-PT1H', 'ACTION:DISPLAY', 'DESCRIPTION:Cita en 1 hora', 'END:VALARM',
+      'END:VEVENT'].filter(Boolean).join('\r\n');
+  }
+
+  function icsMedicamento(m, hora) {
+    const [hh, mm] = hora.split(':');
+    const inicio = new Date(); inicio.setHours(Number(hh), Number(mm), 0, 0);
+    if (inicio < new Date()) inicio.setDate(inicio.getDate() + 1);
+    return ['BEGIN:VEVENT',
+      `UID:med-${m.id}@maya.app`,
+      `DTSTART:${fechaICS(inicio)}`,
+      `DTEND:${fechaICS(new Date(inicio.getTime() + 600000))}`,
+      'RRULE:FREQ=DAILY',
+      `SUMMARY:💊 ${m.nombre.replace(/[,;]/g, ' ')}${m.dosis ? ` (${m.dosis.replace(/[,;]/g, ' ')})` : ''} · ${Store.data.bebe.nombre || 'bebé'}`,
+      'BEGIN:VALARM', 'TRIGGER:PT0M', 'ACTION:DISPLAY', 'DESCRIPTION:Hora del medicamento', 'END:VALARM',
+      'END:VEVENT'].join('\r\n');
+  }
+
+  /* ---------- citas médicas ---------- */
+  function renderCitas() {
+    const ahora = Date.now();
+    const citas = [...Store.data.citas].sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const proximas = citas.filter(c => new Date(c.fecha) >= ahora - 3600000 && !c.hecha);
+    const pasadas = citas.filter(c => new Date(c.fecha) < ahora - 3600000 || c.hecha).reverse();
+    const pinta = c => `
+      <div class="entry">
+        <span class="entry-emoji">🩺</span>
+        <div class="entry-main">
+          <div class="entry-title">${esc(c.titulo)}${c.hecha ? ' ✅' : ''}</div>
+          <div class="entry-sub">${new Date(c.fecha).toLocaleString('es-MX', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${c.lugar ? ` · 📍 ${esc(c.lugar)}` : ''}${c.notas ? ` · ${esc(c.notas)}` : ''}</div>
+        </div>
+        <div class="entry-actions">
+          ${!c.hecha ? `<button data-ics-cita="${c.id}" title="Agregar al calendario">🔔</button>` : ''}
+          <button data-edit="citas:${c.id}">✏️</button>
+          <button data-del="citas:${c.id}">🗑️</button>
+        </div>
+      </div>`;
+    main.innerHTML = `
+      ${volverMas}
+      <h2 class="section-title">Citas médicas 📅</h2>
+      <button class="btn-primary btn-block" id="btn-nueva-cita">＋ Agendar cita</button>
+      <p style="text-align:center;font-size:12.5px;color:var(--text-2);margin:8px 0 2px">El 🔔 la agrega al calendario del teléfono con alarma (1 día y 1 hora antes)</p>
+      ${proximas.length ? `<div class="day-label">Próximas</div><div class="entry-list">${proximas.map(pinta).join('')}</div>`
+        : '<div class="empty-state"><span class="big">📅</span>Agenda su siguiente consulta, vacunas o laboratorio</div>'}
+      ${pasadas.length ? `<details style="margin-top:14px"><summary class="day-label" style="cursor:pointer">Pasadas (${pasadas.length})</summary>
+        <div class="entry-list" style="margin-top:6px">${pasadas.map(pinta).join('')}</div></details>` : ''}
+    `;
+    bindVolver();
+    $('#btn-nueva-cita').onclick = () => hojaCita();
+    main.querySelectorAll('[data-ics-cita]').forEach(b => b.onclick = () => {
+      const c = Store.data.citas.find(x => x.id === b.dataset.icsCita);
+      if (c) descargarICS(`cita-${(c.titulo || 'medica').slice(0, 20)}`, icsCita(c));
+    });
+  }
+
+  function hojaCita(existente) {
+    abrirSheet(`
+      <h2>${existente ? 'Editar cita' : 'Agendar cita'} 🩺</h2>
+      <div class="form-group"><label>Motivo</label>
+        <input type="text" id="f-titulo" value="${esc(existente ? existente.titulo : '')}" placeholder="Control del mes, vacunas, laboratorio…">
+      </div>
+      <div class="form-group"><label>Fecha y hora</label>
+        <input type="datetime-local" id="f-fecha" value="${aInputLocal(existente ? existente.fecha : null)}">
+      </div>
+      <div class="form-group"><label>Lugar (opcional)</label>
+        <input type="text" id="f-lugar" value="${esc(existente ? existente.lugar : '')}" placeholder="Consultorio, hospital…">
+      </div>
+      <div class="form-group"><label>Notas (opcional)</label>
+        <input type="text" id="f-notas" value="${esc(existente ? existente.notas : '')}" placeholder="Llevar cartilla, preguntas para el doctor…">
+      </div>
+      ${existente ? `<label class="checkbox-row"><input type="checkbox" id="f-hecha" ${existente.hecha ? 'checked' : ''}> Ya fuimos ✅</label>` : ''}
+      <button class="btn-primary btn-block" id="f-guardar">Guardar</button>
+    `);
+    $('#f-guardar').onclick = () => {
+      const reg = {
+        titulo: $('#f-titulo').value.trim(),
+        fecha: deInputLocal($('#f-fecha').value),
+        lugar: $('#f-lugar').value.trim(),
+        notas: $('#f-notas').value.trim(),
+        hecha: existente ? $('#f-hecha').checked : false,
+      };
+      if (!reg.titulo) { toast('Escribe el motivo'); return; }
+      if (existente) Store.update('citas', existente.id, reg);
+      else Store.add('citas', reg);
+      cerrarSheet();
+      toast('Cita guardada 📅');
+    };
   }
 
   /* ---------- bienestar de mamá (EPDS) ---------- */
@@ -3338,8 +3504,8 @@
 
     cargarAvatar();
 
-    // una sola vez por teléfono: ¿de quién es este dispositivo?
-    if (!Store.getDispositivo()) {
+    // una sola vez por teléfono: ¿de quién es este dispositivo? (no en demo)
+    if (!Store.getDispositivo() && !Store.modoDemo) {
       setTimeout(preguntarDispositivo, 600);
     }
     // primera vez en este teléfono: elegir tema de color
@@ -3445,6 +3611,76 @@
   // service worker para que funcione sin internet y se pueda instalar
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+
+  /* ---------- demo público (?demo=1): datos sintéticos, cero nube ---------- */
+  function datosDemo() {
+    const now = Date.now();
+    const DIA = 86400000;
+    const iso = ms => new Date(ms).toISOString();
+    const nacimiento = new Date(now - 35 * DIA);
+    const d = {
+      version: 1,
+      bebe: { nombre: 'Emma', nacimiento: nacimiento.toISOString().slice(0, 10), hora: '08:15', mama: 'Ana', papa: 'Leo' },
+      tomas: [], suenos: [], panales: [], condiciones: [], intervenciones: [], medicamentos: [],
+      crecimiento: [], fotos: [], actividades: [], banco: [], citas: [], rutina: null, borrados: [],
+    };
+    let n = 0;
+    const uid = () => 'demo' + (n++);
+    for (let dia = 3; dia >= 0; dia--) {
+      const base = now - dia * DIA;
+      for (let t = 0; t < 7; t++) {
+        const inicio = base - (21 - t * 3) * 3600000;
+        if (inicio > now) continue;
+        d.tomas.push(t % 3 === 2
+          ? { id: uid(), tipo: 'donante', ml: 50 + (t % 2) * 15, lado: null, duracionSeg: null, inicio: iso(inicio), notas: '', autor: t % 2 ? 'mama' : 'papa', updatedAt: iso(inicio) }
+          : { id: uid(), tipo: 'materno', ml: null, lado: t % 2 ? 'der' : 'izq', duracionSeg: 900 + (t % 3) * 240, inicio: iso(inicio), notas: '', autor: 'mama', updatedAt: iso(inicio) });
+      }
+      [20, 16, 12, 8, 4, 1].forEach((h, i) => {
+        const hora = base - h * 3600000;
+        if (hora > now) return;
+        d.panales.push({ id: uid(), tipo: i % 3 === 0 ? 'popo' : i % 3 === 1 ? 'pipi' : 'mixto', hora: iso(hora), color: i % 3 === 0 ? 'mostaza' : null, consistencia: i % 3 === 0 ? 'grumitos' : null, notas: '', autor: i % 2 ? 'papa' : 'mama', updatedAt: iso(hora) });
+      });
+      [[22, 5.5], [13, 1.5], [9, 2]].forEach(([h, dur]) => {
+        const ini = base - h * 3600000;
+        if (ini + dur * 3600000 > now) return;
+        d.suenos.push({ id: uid(), tipo: 'sueno', inicio: iso(ini), fin: iso(ini + dur * 3600000), notas: '', updatedAt: iso(ini) });
+      });
+      const ext = base - 10 * 3600000;
+      if (ext < now) d.banco.push({ id: uid(), tipo: 'extraccion', lugar: dia % 2 ? 'refri' : 'congelador', ml: 70 + dia * 10, fecha: iso(ext), duracionSeg: 1080, modo: dia === 1 ? 'power' : 'normal', notas: '', updatedAt: iso(ext) });
+    }
+    d.banco.push({ id: uid(), tipo: 'consumo', lugar: 'refri', ml: 50, fecha: iso(now - 5 * 3600000), tomaId: d.tomas.find(t => t.tipo === 'donante').id, notas: '', updatedAt: iso(now) });
+    d.crecimiento = [
+      { id: uid(), fecha: nacimiento.toISOString(), pesoKg: 3.1, tallaCm: 50, perimetroCm: 34, updatedAt: iso(now) },
+      { id: uid(), fecha: iso(now - 20 * DIA), pesoKg: 3.4, tallaCm: 52, perimetroCm: null, updatedAt: iso(now) },
+      { id: uid(), fecha: iso(now - 5 * DIA), pesoKg: 4.0, tallaCm: 54, perimetroCm: 36, updatedAt: iso(now) },
+    ];
+    d.condiciones = [{
+      id: uid(), nombre: 'Ictericia', unidad: 'mg/dL', curada: iso(now - 15 * DIA),
+      mediciones: [
+        { id: uid(), valor: 11, fecha: iso(now - 32 * DIA), nota: '' },
+        { id: uid(), valor: 8, fecha: iso(now - 28 * DIA), nota: '' },
+        { id: uid(), valor: 4, fecha: iso(now - 20 * DIA), nota: '' },
+      ],
+      info: null, updatedAt: iso(now),
+    }];
+    d.medicamentos = [{ id: uid(), nombre: 'Vitamina D', dosis: '1 ml', frecuencia: '1 vez al día', notas: '', activo: true, inicio: iso(now - 30 * DIA), updatedAt: iso(now) }];
+    d.citas = [{ id: uid(), titulo: 'Control de los 2 meses + vacunas', lugar: 'Clínica pediátrica', fecha: iso(now + 6 * DIA), notas: 'Llevar cartilla', hecha: false, updatedAt: iso(now) }];
+    d.rutina = { pasos: [
+      { id: 'r1', emoji: '🛁', titulo: 'Baño tibio', min: 10 },
+      { id: 'r2', emoji: '🍼', titulo: 'Última toma con luz baja', min: 15 },
+      { id: 'r3', emoji: '📖', titulo: 'Cuento bajito', min: 5 },
+      { id: 'r4', emoji: '😴', titulo: 'A la cuna somnolienta', min: 1 },
+    ], hora: '20:00', updatedAt: iso(now) };
+    return d;
+  }
+
+  if (new URLSearchParams(location.search).has('demo')) {
+    Store.activarDemo(datosDemo());
+    const listaDemo = document.createElement('div');
+    listaDemo.className = 'demo-liston';
+    listaDemo.textContent = '🧪 DEMO · synthetic data — nothing is saved to any server';
+    document.body.appendChild(listaDemo);
   }
 
   // enlace de configuración (#setup=...): deja lista la sincronización
