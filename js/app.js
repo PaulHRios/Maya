@@ -3961,7 +3961,12 @@
   if (btnIdiomaLogin) {
     const lbl = $('#lang-toggle-label');
     if (lbl) lbl.textContent = I18N.lang === 'en' ? 'Español' : 'English';
-    btnIdiomaLogin.onclick = () => { I18N.set(I18N.lang === 'en' ? 'es' : 'en'); location.reload(); };
+    btnIdiomaLogin.onclick = () => {
+      I18N.set(I18N.lang === 'en' ? 'es' : 'en');
+      // mantener la pantalla de presentación tras recargar (si no, cae al demo)
+      sessionStorage.setItem('maya.ir-login', '1');
+      location.reload();
+    };
   }
 
   $('#login-form').addEventListener('submit', async e => {
