@@ -311,6 +311,18 @@ const I18N = (() => {
     // otros checkboxes / labels
     'Ya fuimos ✅': 'Already went ✅', 'Tratamiento activo': 'Active treatment',
     'Sincronizar automáticamente': 'Sync automatically',
+    // toasts que faltaban (traducidos automáticamente por toast()→I18N.t)
+    'Rutina guardada 🌙': 'Routine saved 🌙', 'Rutina cancelada': 'Routine canceled',
+    'Nota agregada 📝': 'Note added 📝', 'Registro cancelado': 'Entry canceled',
+    'Vigilia registrada 👁️': 'Wake window logged 👁️', 'Este registro no tiene foto': "This entry has no photo",
+    'Foto borrada': 'Photo deleted', 'Actividad cancelada': 'Activity canceled',
+    'Movimiento guardado 🥛': 'Movement saved 🥛', 'Medicamento guardado': 'Medication saved',
+    'Medidas guardadas 📏': 'Measurements saved 📏', 'Foto guardada 📸': 'Photo saved 📸',
+    'Guardado 💗': 'Saved 💗', 'Llena usuario, repo y token': 'Fill in user, repo and token',
+    'Sincronizando…': 'Syncing…', 'Respaldo importado ✅': 'Backup imported ✅',
+    'Cuenta agregada 👪': 'Account added 👪', 'Registro borrado': 'Entry deleted',
+    'Ponle nombre': 'Give it a name', 'Cita guardada 📅': 'Appointment saved 📅',
+    'Actualizando… 💗': 'Refreshing… 💗',
 
   };
 

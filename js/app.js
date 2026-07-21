@@ -63,7 +63,9 @@
   let toastTimer;
   function toast(msg) {
     const t = $('#toast');
-    t.textContent = msg;
+    // traduce automáticamente los toasts que estén en el diccionario;
+    // los que ya vienen en inglés o llevan variables se muestran igual
+    t.textContent = I18N.t(msg);
     t.classList.remove('hidden');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.add('hidden'), 2200);
@@ -665,7 +667,7 @@
     Store.setTimers(timers);
     if (durmio) {
       iniciarSueno();
-      celebracion('🌙', '¡Buenas noches!', 'Rutina completa y timer de sueño corriendo');
+      celebracion('🌙', I18N.lang === 'en' ? 'Good night!' : '¡Buenas noches!', I18N.lang === 'en' ? 'Routine complete and sleep timer running' : 'Rutina completa y timer de sueño corriendo');
     } else {
       toast('Rutina cancelada');
     }
@@ -1359,7 +1361,7 @@
       avisoColor(colorEf);
     };
     $('#an-borrar').onclick = () => {
-      if (!confirm('¿Borrar la foto? El registro del pañal se conserva.')) return;
+      if (!confirm(I18N.t('¿Borrar la foto? El registro del pañal se conserva.'))) return;
       Store.remove('fotos', foto.id);
       Store.update('panales', p.id, { fotoId: null });
       cerrarSheet();
@@ -1895,13 +1897,13 @@
       const promSesion = exts.length >= 5 ? exts.reduce((s, m) => s + Number(m.ml), 0) / exts.length : null;
       if (exts.length >= 3 && ml > maxSesion) {
         confeti(100);
-        celebracion('🏆', '¡Nuevo récord de sesión!', `${ml} ml en una sola extracción`);
+        celebracion('🏆', I18N.lang === 'en' ? 'New session record!' : '¡Nuevo récord de sesión!', I18N.lang === 'en' ? `${ml} ml in a single session` : `${ml} ml en una sola extracción`);
       } else if (Object.keys(porDia).length >= 2 && totalHoy > maxDiaPrevio) {
         confeti(80);
-        celebracion('🥇', '¡Récord de producción diaria!', `${totalHoy} ml extraídos hoy`);
+        celebracion('🥇', I18N.lang === 'en' ? 'Daily production record!' : '¡Récord de producción diaria!', I18N.lang === 'en' ? `${totalHoy} ml pumped today` : `${totalHoy} ml extraídos hoy`);
       } else if (promSesion && ml < promSesion * 0.6) {
         // sesión floja: ánimo, no números fríos
-        celebracion('💗', 'Tranquila, es normal', `Hay sesiones y días con menos leche — no dice nada de ti. Respira, toma agua y date un respiro 🤍`);
+        celebracion('💗', I18N.lang === 'en' ? "It's okay, this is normal" : 'Tranquila, es normal', I18N.lang === 'en' ? 'Some sessions and days yield less milk — it says nothing about you. Breathe, drink water and take a break 🤍' : `Hay sesiones y días con menos leche — no dice nada de ti. Respira, toma agua y date un respiro 🤍`);
         setTimeout(() => toast(I18N.lang === 'en' ? `🥛 +${ml} ml saved · every drop counts` : `🥛 +${ml} ml guardados · cada gota cuenta`), 3600);
       } else {
         toast(`🥛 +${ml} ml al ${lugar === 'congelador' ? 'congelador' : 'refri'}`);
@@ -2394,14 +2396,14 @@
       if (!c || !confirm(I18N.lang === 'en' ? `Mark "${c.nombre}" as resolved? It will stop appearing in the health check and goals.` : `¿Marcar "${c.nombre}" como superada? Dejará de aparecer en el análisis y los retos.`)) return;
       Store.update('condiciones', c.id, { curada: new Date().toISOString() });
       confeti(100);
-      celebracion('🎉', `¡${c.nombre} superada!`, `${Store.data.bebe.nombre || 'La bebé'} lo logró 💪`);
+      celebracion('🎉', I18N.lang === 'en' ? `${c.nombre} resolved!` : `¡${c.nombre} superada!`, I18N.lang === 'en' ? `${nb()} did it 💪` : `${nb()} lo logró 💪`);
     });
     main.querySelectorAll('[data-reabrir]').forEach(b => b.onclick = () => {
       Store.update('condiciones', b.dataset.reabrir, { curada: null });
       toast('Condición reabierta');
     });
     cont.querySelectorAll('[data-borrar-cond]').forEach(b => b.onclick = () => {
-      if (confirm('¿Borrar esta condición y todas sus mediciones?')) {
+      if (confirm(I18N.t('¿Borrar esta condición y todas sus mediciones?'))) {
         Store.remove('condiciones', b.dataset.borrarCond);
         toast('Condición borrada');
       }
@@ -2582,7 +2584,7 @@
     main.querySelectorAll('[data-ics-med]').forEach(b => b.onclick = () => {
       const m = Store.data.medicamentos.find(x => x.id === b.dataset.icsMed);
       if (!m) return;
-      const hora = prompt('¿A qué hora quieres el recordatorio diario? (HH:MM)', '09:00');
+      const hora = prompt(I18N.lang === 'en' ? 'What time do you want the daily reminder? (HH:MM)' : '¿A qué hora quieres el recordatorio diario? (HH:MM)', '09:00');
       if (!hora || !/^\d{1,2}:\d{2}$/.test(hora.trim())) return;
       descargarICS(`medicamento-${m.nombre.slice(0, 20)}`, icsMedicamento(m, hora.trim()));
     });
@@ -2756,7 +2758,7 @@
     if (!file) return;
     const dataUrl = await leerFoto(file).catch(() => null);
     if (!dataUrl) { toast('No se pudo leer la foto'); return; }
-    const titulo = semana != null ? `Semana ${semana} 💗` : (prompt('Título de la foto (opcional):') || '');
+    const titulo = semana != null ? `${I18N.lang === 'en' ? 'Week' : 'Semana'} ${semana} 💗` : (prompt(I18N.lang === 'en' ? 'Photo title (optional):' : 'Título de la foto (opcional):') || '');
     const id = Store.uid();
     Store.add('fotos', {
       id, fecha: new Date().toISOString(), titulo,
@@ -2766,7 +2768,7 @@
     });
     if (semana != null) {
       confeti(80);
-      celebracion('📸', `¡Foto de la semana ${semana}!`, 'Su colección de recuerdos va creciendo');
+      celebracion('📸', I18N.lang === 'en' ? `Week ${semana} photo!` : `¡Foto de la semana ${semana}!`, I18N.lang === 'en' ? 'Their memory collection keeps growing' : 'Su colección de recuerdos va creciendo');
     } else {
       toast('Foto guardada 📸');
     }
@@ -2844,17 +2846,17 @@
       <img src="${f.dataUrl || ''}">
       <div class="pv-caption">${esc(f.titulo || '')}<br><small>${new Date(f.fecha).toLocaleString(I18N.loc())}</small></div>
       <div class="pv-actions">
-        <button class="btn-danger" id="pv-del">Borrar</button>
-        <button class="btn-secondary" id="pv-close">Cerrar</button>
+        <button class="btn-danger" id="pv-del">${I18N.lang === 'en' ? 'Delete' : 'Borrar'}</button>
+        <button class="btn-secondary" id="pv-close">${I18N.lang === 'en' ? 'Close' : 'Cerrar'}</button>
       </div>
     `;
     document.body.appendChild(div);
     div.querySelector('#pv-close').onclick = () => div.remove();
     div.querySelector('#pv-del').onclick = () => {
-      if (confirm('¿Borrar esta foto del registro?')) {
+      if (confirm(I18N.lang === 'en' ? 'Delete this photo from the record?' : '¿Borrar esta foto del registro?')) {
         Store.remove('fotos', f.id);
         div.remove();
-        toast('Foto borrada');
+        toast(I18N.lang === 'en' ? 'Photo deleted' : 'Foto borrada');
       }
     };
   }
@@ -3266,17 +3268,17 @@
       if (a === 'toma-der') iniciarToma('der');
       if (a === 'toma-pausa') pausarToma();
       if (a === 'toma-terminar') terminarToma(false);
-      if (a === 'toma-cancelar') { if (confirm('¿Cancelar la toma sin guardar?')) terminarToma(true); }
+      if (a === 'toma-cancelar') { if (confirm(I18N.t('¿Cancelar la toma sin guardar?'))) terminarToma(true); }
       if (a === 'toma-manual') hojaBiberon('materno');
       if (a === 'biberon') hojaTipoBiberon();
       if (a === 'biberon-tipo') hojaBiberon(tipoComida);
       if (a === 'dormir') iniciarSueno();
       if (a === 'sueno-terminar') terminarSueno(false);
-      if (a === 'sueno-cancelar') { if (confirm('¿Cancelar sin guardar?')) terminarSueno(true); }
+      if (a === 'sueno-cancelar') { if (confirm(I18N.t('¿Cancelar sin guardar?'))) terminarSueno(true); }
       if (a === 'sueno-manual') hojaSuenoManual();
       if (a === 'rutina-editar') hojaEditarRutina();
       if (a === 'rutina-iniciar') iniciarRutina();
-      if (a === 'rutina-cancelar') { if (confirm('¿Cancelar la rutina de esta noche?')) terminarRutina(false); }
+      if (a === 'rutina-cancelar') { if (confirm(I18N.t('¿Cancelar la rutina de esta noche?'))) terminarRutina(false); }
       if (a === 'rutina-dormir') terminarRutina(true);
       if (a === 'ir-sueno') {
         tabActual = 'sueno';
@@ -3286,7 +3288,7 @@
       }
       if (a === 'vigilia') iniciarVigilia();
       if (a === 'vigilia-terminar') terminarVigilia(false);
-      if (a === 'vigilia-cancelar') { if (confirm('¿Cancelar sin guardar?')) terminarVigilia(true); }
+      if (a === 'vigilia-cancelar') { if (confirm(I18N.t('¿Cancelar sin guardar?'))) terminarVigilia(true); }
       if (a === 'vigilia-nota') hojaNotaVigilia();
       if (a === 'panal-pipi') registrarPanal('pipi');
       if (a === 'panal-popo') registrarPanal('popo');
@@ -3310,9 +3312,9 @@
         window.scrollTo(0, 0);
       }
       if (a === 'ext-terminar') terminarExtraccion(false);
-      if (a === 'ext-cancelar') { if (confirm('¿Cancelar la extracción sin guardar?')) terminarExtraccion(true); }
+      if (a === 'ext-cancelar') { if (confirm(I18N.t('¿Cancelar la extracción sin guardar?'))) terminarExtraccion(true); }
       if (a === 'act-terminar') terminarActividad(true);
-      if (a === 'act-cancelar') { if (confirm('¿Cancelar la actividad sin marcarla?')) terminarActividad(false); }
+      if (a === 'act-cancelar') { if (confirm(I18N.t('¿Cancelar la actividad sin marcarla?'))) terminarActividad(false); }
       if (a === 'foto-semanal') pedirFotoSemanal(Number(btn.dataset.sem));
       return;
     }
@@ -3338,7 +3340,7 @@
     const delBtn = e.target.closest('[data-del]');
     if (delBtn) {
       const [col, id] = delBtn.dataset.del.split(':');
-      if (confirm('¿Borrar este registro?')) {
+      if (confirm(I18N.t('¿Borrar este registro?'))) {
         if (col === 'panales') {
           const p = Store.data.panales.find(x => x.id === id);
           if (p && p.fotoId) Store.remove('fotos', p.fotoId); // su foto se va con él
@@ -3424,7 +3426,7 @@
       Store.agregarBebe(nombre);
       cerrarSheet();
       confeti(80);
-      celebracion('👶', `¡Bienvenida ${nombre}!`, 'Su registro está listo');
+      celebracion('👶', I18N.lang === 'en' ? `Welcome ${nombre}!` : `¡Bienvenida ${nombre}!`, I18N.lang === 'en' ? 'Their journal is ready' : 'Su registro está listo');
       render();
       cargarAvatar();
       setTimeout(() => elegirFotoPerfil(avatar => {
@@ -3930,7 +3932,7 @@
       $('#login-screen').classList.add('hidden');
       iniciarApp();
       confeti(90);
-      celebracion('👶', `¡Bienvenido ${bebe}!`, 'Su registro está listo — a llenar de recuerdos');
+      celebracion('👶', I18N.lang === 'en' ? `Welcome ${bebe}!` : `¡Bienvenido ${bebe}!`, I18N.lang === 'en' ? 'Their journal is ready — time to fill it with memories' : 'Su registro está listo — a llenar de recuerdos');
     };
   }
 
