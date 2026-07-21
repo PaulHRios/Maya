@@ -68,7 +68,9 @@ const Store = (() => {
   });
 
   let data = emptyData();
-  let config = { owner: 'PaulHRios', repo: 'maya_datos', branch: 'main', token: '', autoSync: true, lastSync: null };
+  // el usuario/repo reales viven en SYNC_EMBED y solo se adoptan para la
+  // familia original al cargar; el default arranca en blanco
+  let config = { owner: '', repo: '', branch: 'main', token: '', autoSync: true, lastSync: null };
   let syncState = 'off'; // off | ok | busy | error
   let syncTimer = null;
   const listeners = [];
@@ -560,7 +562,7 @@ const Store = (() => {
     marcarActividad, fetchAvatar, getAvatarCache,
     getDispositivo, setDispositivo,
     getBebes, cambiarBebe, agregarBebe, activarDemo,
-    crearCuenta, cuentasDeFamilia,
+    crearCuenta, cuentasDeFamilia, entrarAFamilia: iniciarSesionFamilia,
     get familiaActiva() { return familiaActiva(); },
     get modoDemo() { return modoDemo; },
     get bebeActivo() { return bebeActivo; },

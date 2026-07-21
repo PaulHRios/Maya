@@ -56,6 +56,8 @@
   const deInputLocal = v => new Date(v).toISOString();
 
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // nombre del bebé activo (nunca el real de otra familia); genérico si aún no lo ponen
+  const nb = () => esc(Store.data.bebe.nombre || (I18N.lang === 'en' ? 'your baby' : 'tu bebé'));
 
   /* ---------- toast y hoja modal ---------- */
   let toastTimer;
@@ -318,7 +320,7 @@
           <span class="entry-time">${fmtHora(t.inicio)}</span>
           ${btnsEntrada('tomas', t.id)}
         </div>
-      `, { emoji: '🍼', texto: 'Aquí aparecerán las tomas de Maya' })}
+      `, { emoji: '🍼', texto: I18N.lang === 'en' ? `${nb()}'s feeds will appear here` : `Aquí aparecerán las tomas de ${nb()}` })}
     `;
 
     $('#seg-comida').addEventListener('click', e => {
@@ -343,7 +345,7 @@
     const ml0 = existente ? (existente.ml || 60) : 60;
     abrirSheet(`
       <h2>${existente ? 'Editar toma' : tipo === 'donante' ? 'Toma de leche extraída 🥛' : tipo === 'formula' ? 'Fórmula 🍼' : 'Toma de pecho 🤱'}</h2>
-      ${!existente && tipo === 'donante' ? `<p style="font-size:13px;color:var(--text-2);margin:-6px 0 12px">Esto registra lo que Maya <b>se tomó</b> en biberón (se resta del banco de leche). Para agregar leche que extrajiste, usa el <b>Banco de leche 🥛</b>.</p>` : ''}
+      ${!existente && tipo === 'donante' ? `<p style="font-size:13px;color:var(--text-2);margin:-6px 0 12px">${I18N.lang === 'en' ? `This logs what ${nb()} <b>drank</b> from a bottle (it is deducted from the milk bank). To add milk you pumped, use the <b>Milk bank 🥛</b>.` : `Esto registra lo que ${nb()} <b>se tomó</b> en biberón (se resta del banco de leche). Para agregar leche que extrajiste, usa el <b>Banco de leche 🥛</b>.`}</p>` : ''}
       ${tipo === 'materno' ? `
         <div class="form-group"><label>Lado</label>
           <select id="f-lado">
@@ -801,7 +803,7 @@
           </div>
           ${btnsEntrada('suenos', s.id)}
         </div>`;
-      }, { emoji: '🌙', texto: 'Aquí aparecerán los sueños y vigilias de Maya' })}
+      }, { emoji: '🌙', texto: I18N.lang === 'en' ? `${nb()}'s sleep and wake windows will appear here` : `Aquí aparecerán los sueños y vigilias de ${nb()}` })}
     `;
 
     if (timers.vigilia) {
@@ -1486,8 +1488,8 @@
       main.innerHTML = `
         <h2 class="section-title">Retos del día 🏆</h2>
         <div class="empty-state"><span class="big">🎂</span>
-          Para sugerirle actividades a su medida, pon la fecha de nacimiento de Maya en
-          <b>Más → Ajustes</b>.</div>`;
+          ${I18N.lang === 'en' ? `To suggest activities tailored to ${nb()}, set the birth date in` : `Para sugerirle actividades a su medida, pon la fecha de nacimiento de ${nb()} en`}
+          <b>${I18N.lang === 'en' ? 'More → Settings' : 'Más → Ajustes'}</b>.</div>`;
       return;
     }
     const hoy = fechaLocal();
@@ -1587,7 +1589,7 @@
       const todas = info.tareas.every(x => Store.data.actividades.some(a => a.fecha === hoy && a.tarea === x.key && a.hecha));
       if (todas) {
         confeti(120);
-        celebracion('🌟', '¡Día perfecto!', `Completaron todos los retos de hoy con ${Store.data.bebe.nombre || 'Maya'}`);
+        celebracion('🌟', I18N.lang === 'en' ? 'Perfect day!' : '¡Día perfecto!', I18N.lang === 'en' ? `You finished all of today's goals with ${nb()}` : `Completaron todos los retos de hoy con ${nb()}`);
       }
     }, 350);
   }
@@ -1765,7 +1767,7 @@
     },
     postoma: {
       nombre: 'Después de amamantar', emoji: '➕',
-      desc: '10 min justo después de la toma: manda la señal de "se necesita más" sin quitarle leche a Maya.',
+      desc: '10 min justo después de la toma: manda la señal de "se necesita más" sin quitarle leche a la bebé.',
       fases: [{ nombre: 'Extraer', min: 10 }],
     },
   };
@@ -1941,7 +1943,7 @@
     { emoji: '🎚️', texto: 'En tu Medela usa el vacío más alto que NO duela: sube niveles hasta que incomode y bájale uno. Dolor = menos leche, no más.' },
     { emoji: '🤲', texto: 'Aprovecha que tu bomba es manos libres: compresiones suaves en el pecho mientras extraes sacan notablemente más (método "manos activas" del timer).' },
     { emoji: '💆', texto: 'Masaje suave y compresas tibias 2 minutos antes: el reflejo de bajada llega antes y sale más leche.' },
-    { emoji: '👶', texto: 'Ver, oler o tener cerca a Maya (o su foto en la app 😉) mientras extraes libera oxitocina y mejora la bajada.' },
+    { emoji: '👶', texto: 'Ver, oler o tener cerca a la bebé (o su foto en la app 😉) mientras extraes libera oxitocina y mejora la bajada.' },
     { emoji: '💧', texto: 'Hidratación y comidas completas: la leche es ~90% agua. Ten un vaso al lado en cada sesión.' },
     { emoji: '🍼', texto: 'El método "Después de amamantar" del timer (10 min tras la toma) manda la señal de "se necesita más" sin robarle leche a la bebé.' },
     { emoji: '🧘', texto: 'El estrés bloquea la oxitocina: hombros sueltos, respira profundo y no te quedes viendo el bote.' },
@@ -2564,7 +2566,7 @@
               <div class="entry-sub">${[m.dosis, m.frecuencia, m.notas].filter(Boolean).map(esc).join(' · ') || '—'}</div>
             </div>
             ${btnsEntrada('medicamentos', m.id)}
-          </div>`).join('') || '<div class="empty-state"><span class="big">💊</span>Vitaminas, tratamientos y medicamentos de Maya</div>'}
+          </div>`).join('') || `<div class="empty-state"><span class="big">💊</span>${I18N.lang === 'en' ? `${nb()}'s vitamins, treatments and medications` : `Vitaminas, tratamientos y medicamentos de ${nb()}`}</div>`}
       </div>
     `;
     bindVolver();
@@ -2708,7 +2710,7 @@
         <button class="btn-secondary" style="flex:1" id="btn-galeria">🖼️ Subir foto</button>
       </div>
       <div class="photo-grid" style="margin-top:14px" id="grid-fotos">
-        ${fotos.map(f => `<img data-foto="${f.id}" alt="${esc(f.titulo || 'Foto de Maya')}" loading="lazy">`).join('') ||
+        ${fotos.map(f => `<img data-foto="${f.id}" alt="${esc(f.titulo || (I18N.lang === 'en' ? 'Baby photo' : 'Foto del bebé'))}" loading="lazy">`).join('') ||
           '<div class="empty-state" style="grid-column:1/-1"><span class="big">📸</span>Guarda fotos de momentos especiales o de cosas que quieras enseñarle al pediatra</div>'}
       </div>
     `;
@@ -2943,10 +2945,10 @@
         </div>
         <div class="form-row">
           <div class="form-group"><label>Mamá</label>
-            <input type="text" id="a-mama" value="${esc(d.bebe.mama || '')}" placeholder="Rubi">
+            <input type="text" id="a-mama" value="${esc(d.bebe.mama || '')}" placeholder="${I18N.lang === 'en' ? "Mom's name" : 'Nombre de mamá'}">
           </div>
           <div class="form-group"><label>Papá</label>
-            <input type="text" id="a-papa" value="${esc(d.bebe.papa || '')}" placeholder="Paul">
+            <input type="text" id="a-papa" value="${esc(d.bebe.papa || '')}" placeholder="${I18N.lang === 'en' ? "Dad's name" : 'Nombre de papá'}">
           </div>
         </div>
         <div class="form-group"><label>Este teléfono lo usa</label>
@@ -2991,10 +2993,10 @@
         </p>
         <div class="form-row">
           <div class="form-group"><label>Usuario u organización</label>
-            <input type="text" id="a-owner" value="${esc(cfg.owner)}" placeholder="PaulHRios" autocapitalize="none">
+            <input type="text" id="a-owner" value="${esc(cfg.owner)}" placeholder="${I18N.lang === 'en' ? 'your-github-user' : 'tu-usuario-github'}" autocapitalize="none">
           </div>
           <div class="form-group"><label>Repositorio</label>
-            <input type="text" id="a-repo" value="${esc(cfg.repo)}" placeholder="maya_datos" autocapitalize="none">
+            <input type="text" id="a-repo" value="${esc(cfg.repo)}" placeholder="${I18N.lang === 'en' ? 'baby-data' : 'datos-bebe'}" autocapitalize="none">
           </div>
         </div>
         <div class="form-group"><label>Token de acceso (fine-grained, con permiso Contents)</label>
@@ -3034,7 +3036,7 @@
     const on = (sel, fn) => { const el = $(sel); if (el) el.onclick = fn; };
 
     on('#a-guardar-bebe', () => {
-      d.bebe.nombre = $('#a-nombre').value.trim() || 'Maya';
+      d.bebe.nombre = $('#a-nombre').value.trim() || d.bebe.nombre || (I18N.lang === 'en' ? 'Baby' : 'Bebé');
       d.bebe.nacimiento = $('#a-nac').value;
       d.bebe.hora = $('#a-hora-nac').value;
       d.bebe.mama = $('#a-mama').value.trim();
@@ -3376,7 +3378,7 @@
 
   function actualizarHeader() {
     const d = Store.data;
-    $('#header-title').textContent = d.bebe.nombre || 'Maya';
+    $('#header-title').textContent = d.bebe.nombre || (I18N.lang === 'en' ? 'Baby' : 'Bebé');
     let sub = fmtFechaLarga(new Date());
     if (d.bebe.nacimiento) {
       const dias = Math.floor((Date.now() - new Date(`${d.bebe.nacimiento}T${d.bebe.hora || '00:00'}`)) / 86400000);
@@ -3921,7 +3923,9 @@
       if (!bebe) { toast('Ponle nombre a tu bebé'); return; }
       const r = await Store.crearCuenta({ email, pass, quien: rol, nombreBebe: bebe });
       if (r.error) { toast(r.error); return; }
-      await Store.login(email, pass);
+      // entrar DIRECTO a la familia recién creada (no por login(), que
+      // podría chocar con una cuenta integrada y mandar a otra familia)
+      Store.entrarAFamilia(r.familia, rol, email.trim().toLowerCase());
       cerrarSheet();
       $('#login-screen').classList.add('hidden');
       iniciarApp();
@@ -4053,12 +4057,15 @@
   const teniaSesionReal = Store.hasSession();
   if (paramsURL.has('demo') || (!teniaSesionReal && !quiereLogin)) {
     const seedDemo = datosDemo();
-    seedDemo.bebe.avatar = ilustracionDemo('avatar');
+    // fotos reales libres de derechos para el demo; si el archivo no cargó,
+    // se usan las ilustraciones de canvas como respaldo
+    const DF = window.DEMO_FOTOS || {};
+    seedDemo.bebe.avatar = DF.avatar || ilustracionDemo('avatar');
     const ahoraDemo = Date.now();
     seedDemo.fotos = [
-      { id: 'demo-f1', fecha: new Date(ahoraDemo - 86400000).toISOString(), titulo: I18N.lang === 'en' ? 'First nap in her crib 🌙' : 'Primera siesta en su cuna 🌙', archivo: '', dataUrl: ilustracionDemo('luna'), sincronizada: true, semana: 4 },
-      { id: 'demo-f2', fecha: new Date(ahoraDemo - 3 * 86400000).toISOString(), titulo: I18N.lang === 'en' ? 'Meeting her teddy 🧸' : 'Conociendo a su osito 🧸', archivo: '', dataUrl: ilustracionDemo('osito'), sincronizada: true },
-      { id: 'demo-f3', fecha: new Date(ahoraDemo - 5 * 86400000).toISOString(), titulo: I18N.lang === 'en' ? 'One month party 🎈' : 'Fiesta de un mes 🎈', archivo: '', dataUrl: ilustracionDemo('globos'), sincronizada: true },
+      { id: 'demo-f1', fecha: new Date(ahoraDemo - 86400000).toISOString(), titulo: I18N.lang === 'en' ? 'Holding on tight 🤍' : 'Agarrada fuerte 🤍', archivo: '', dataUrl: DF.g1 || ilustracionDemo('luna'), sincronizada: true, semana: 4 },
+      { id: 'demo-f2', fecha: new Date(ahoraDemo - 3 * 86400000).toISOString(), titulo: I18N.lang === 'en' ? 'Those little feet 👣' : 'Esos piecitos 👣', archivo: '', dataUrl: DF.g2 || ilustracionDemo('osito'), sincronizada: true },
+      { id: 'demo-f3', fecha: new Date(ahoraDemo - 5 * 86400000).toISOString(), titulo: I18N.lang === 'en' ? 'Her first day 🏥' : 'Su primer día 🏥', archivo: '', dataUrl: DF.g3 || ilustracionDemo('globos'), sincronizada: true },
     ];
     Store.activarDemo(seedDemo);
     const listaDemo = document.createElement('button');
