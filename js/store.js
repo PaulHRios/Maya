@@ -411,6 +411,10 @@ const Store = (() => {
         return !t || t.at < (item.updatedAt || '');
       });
     }
+    // conservar el dataUrl de las fotos ya descargadas: el remoto no lo trae
+    // (se guarda aparte) y sin esto la galería tendría que volver a bajarlas
+    const dataUrlPorId = new Map((data.fotos || []).filter(f => f.dataUrl).map(f => [f.id, f.dataUrl]));
+    merged.fotos.forEach(f => { if (!f.dataUrl && dataUrlPorId.has(f.id)) f.dataUrl = dataUrlPorId.get(f.id); });
     return merged;
   }
 

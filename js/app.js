@@ -2701,7 +2701,9 @@
   }
 
   /* ---------- Fotos ---------- */
+  let galeriaTimer = null;
   function renderFotos() {
+    clearInterval(galeriaTimer); galeriaTimer = null;
     // las fotos de pañal viven en su registro, no en la galería de recuerdos
     const fotos = Store.data.fotos.filter(f => f.categoria !== 'panal').sort((a, b) => b.fecha.localeCompare(a.fecha));
     main.innerHTML = `
@@ -2727,19 +2729,33 @@
     const grid = $('#grid-fotos');
     if (grid) grid.onclick = e => { const im = e.target.closest('[data-foto]'); if (!im) return; const f = fotos.find(x => x.id === im.dataset.foto); if (f) verFoto(f); };
 
-    fotos.forEach(async f => {
-      // primero lo que ya tengamos en memoria (demo/caché) para pintar al instante
-      let src = f.dataUrl;
-      const pintar = () => {
-        // re-consulta el <img> DESPUÉS del await: si un re-render lo reemplazó,
-        // agarra el nodo vigente en vez de uno huérfano
-        const img = main.querySelector(`[data-foto="${f.id}"]`);
-        if (img && src) { img.src = src; img.classList.remove('foto-cargando'); }
-      };
-      if (src) { pintar(); return; }
-      src = await Store.fetchPhoto(f);
-      pintar();
-    });
+    // carga una miniatura: obtiene el dataUrl (caché o GitHub) y REEMPLAZA el
+    // <img> por uno nuevo. Reasignar src sobre el mismo elemento a veces no
+    // repinta en iOS; recrear el nodo fuerza el pintado, como al re-navegar.
+    const cargarFoto = async (f) => {
+      const src = f.dataUrl || await Store.fetchPhoto(f);
+      if (!src) return false;
+      const img = main.querySelector(`[data-foto="${f.id}"]`);
+      if (!img) return false;
+      if (img.src === src && img.complete && img.naturalWidth > 0) return true; // ya está
+      const fresh = img.cloneNode(false);
+      fresh.classList.remove('foto-cargando');
+      fresh.src = src;
+      img.replaceWith(fresh);
+      return true;
+    };
+    fotos.forEach(cargarFoto);
+
+    // red de seguridad: cada 3 s reintenta las que sigan sin imagen, hasta que
+    // todas carguen (o se salga del carrete, o tras varios intentos)
+    let intentos = 0;
+    galeriaTimer = setInterval(() => {
+      const g = $('#grid-fotos');
+      if (!g) { clearInterval(galeriaTimer); galeriaTimer = null; return; }
+      const faltan = [...g.querySelectorAll('img')].filter(im => !im.complete || im.naturalWidth === 0);
+      if (!faltan.length || ++intentos > 12) { clearInterval(galeriaTimer); galeriaTimer = null; return; }
+      faltan.forEach(im => { const f = fotos.find(x => x.id === im.dataset.foto); if (f) cargarFoto(f); });
+    }, 3000);
   }
 
   // lee y reduce una foto a un dataURL listo para guardar/sincronizar
