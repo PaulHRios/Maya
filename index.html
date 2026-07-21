@@ -17,22 +17,34 @@
 </head>
 <body>
 
-<!-- ====== LOGIN ====== -->
+<!-- ====== LOGIN / PRESENTACIÓN ====== -->
 <div id="login-screen" class="login-screen hidden">
   <div class="login-card">
     <div class="login-icon">💗</div>
     <h1>Maya</h1>
     <p class="login-sub">El diario de nuestra bebé</p>
+    <p class="login-pitch">Todo el cuidado de tu bebé en un solo lugar, privado y en tu teléfono: tomas, sueño, pañales, salud y sus primeros logros.</p>
+
+    <div class="login-features">
+      <div class="login-feat bg-peach"><span>🍼</span><b>Tomas y lactancia</b><small>Timers de pecho, biberón y extracción</small></div>
+      <div class="login-feat bg-lav"><span>🌙</span><b>Sueño y rutinas</b><small>Ventanas de descanso y bitácora nocturna</small></div>
+      <div class="login-feat bg-blue"><span>💧</span><b>Pañales con análisis</b><small>Color y consistencia, con foto opcional</small></div>
+      <div class="login-feat bg-mint"><span>🥛</span><b>Banco de leche</b><small>Refri y congelador siempre al día</small></div>
+      <div class="login-feat bg-yellow"><span>🏆</span><b>Retos por etapa</b><small>Estimulación temprana según su edad</small></div>
+      <div class="login-feat bg-pink"><span>💚</span><b>Bienestar de mamá</b><small>Un chequeo privado, solo para ti</small></div>
+    </div>
+
+    <button class="btn-primary btn-block login-cta-demo" id="btn-ver-demo">🧪 Probar el demo</button>
+    <p class="login-demo-hint">Datos de ejemplo · nada se guarda</p>
+
+    <div class="login-divider"><span>Entrar a nuestra cuenta</span></div>
     <form id="login-form">
       <input type="text" id="login-user" placeholder="Correo" autocomplete="username" inputmode="email" autocapitalize="none" required>
       <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password" required>
-      <button type="submit" class="btn-primary btn-block">Entrar</button>
+      <button type="submit" class="btn-secondary btn-block">Entrar</button>
     </form>
     <p id="login-error" class="login-error hidden">Usuario o contraseña incorrectos</p>
-    <div style="margin-top:16px;display:flex;justify-content:center;gap:6px;flex-wrap:wrap">
-      <button class="btn-ghost" id="btn-crear-cuenta">✨ Crear cuenta nueva</button>
-      <button class="btn-ghost" id="btn-ver-demo">🧪 Ver el demo</button>
-    </div>
+    <button class="btn-ghost btn-block" id="btn-crear-cuenta" style="margin-top:10px">✨ Crear cuenta nueva</button>
   </div>
 </div>
 

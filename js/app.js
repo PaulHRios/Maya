@@ -1164,12 +1164,14 @@
       }, { emoji: '💧', texto: 'Aquí aparecerán los cambios de pañal' })}
     `;
 
-    main.querySelectorAll('[data-foto-panal]').forEach(async img => {
-      const f = Store.data.fotos.find(x => x.id === img.dataset.fotoPanal);
-      if (!f) { img.remove(); return; }
+    main.querySelectorAll('[data-foto-panal]').forEach(async img0 => {
+      const f = Store.data.fotos.find(x => x.id === img0.dataset.fotoPanal);
+      if (!f) { img0.remove(); return; }
       const p = Store.data.panales.find(x => x.fotoId === f.id);
       const src = f.dataUrl || await Store.fetchPhoto(f);
-      if (src) { img.src = src; img.onclick = () => hojaAnalisisPanal(p); }
+      // re-consulta el <img> por si un re-render lo reemplazó durante el fetch
+      const img = main.querySelector(`[data-foto-panal="${f.id}"]`) || img0;
+      if (src && img) { img.src = src; img.onclick = () => hojaAnalisisPanal(p); }
     });
   }
 
@@ -2712,8 +2714,8 @@
         <button class="btn-secondary" style="flex:1" id="btn-galeria">🖼️ Subir foto</button>
       </div>
       <div class="photo-grid" style="margin-top:14px" id="grid-fotos">
-        ${fotos.map(f => `<img data-foto="${f.id}" alt="${esc(f.titulo || (I18N.lang === 'en' ? 'Baby photo' : 'Foto del bebé'))}" loading="lazy">`).join('') ||
-          '<div class="empty-state" style="grid-column:1/-1"><span class="big">📸</span>Guarda fotos de momentos especiales o de cosas que quieras enseñarle al pediatra</div>'}
+        ${fotos.map(f => `<img class="foto-cargando" data-foto="${f.id}" alt="${esc(f.titulo || (I18N.lang === 'en' ? 'Baby photo' : 'Foto del bebé'))}" decoding="async">`).join('') ||
+          `<div class="empty-state" style="grid-column:1/-1"><span class="big">📸</span>${I18N.t('Guarda fotos de momentos especiales o de cosas que quieras enseñarle al pediatra')}</div>`}
       </div>
     `;
     bindVolver();
@@ -2721,13 +2723,22 @@
     $('#btn-galeria').onclick = () => $('#foto-galeria').click();
     $('#foto-input').onchange = e => procesarFoto(e.target.files[0]);
     $('#foto-galeria').onchange = e => procesarFoto(e.target.files[0]);
+    // clic en cualquier miniatura → abre el visor (delegación: sobrevive re-render)
+    const grid = $('#grid-fotos');
+    if (grid) grid.onclick = e => { const im = e.target.closest('[data-foto]'); if (!im) return; const f = fotos.find(x => x.id === im.dataset.foto); if (f) verFoto(f); };
 
     fotos.forEach(async f => {
-      const img = main.querySelector(`[data-foto="${f.id}"]`);
-      if (!img) return;
-      const src = f.dataUrl || await Store.fetchPhoto(f);
-      if (src) img.src = src;
-      img.onclick = () => verFoto(f);
+      // primero lo que ya tengamos en memoria (demo/caché) para pintar al instante
+      let src = f.dataUrl;
+      const pintar = () => {
+        // re-consulta el <img> DESPUÉS del await: si un re-render lo reemplazó,
+        // agarra el nodo vigente en vez de uno huérfano
+        const img = main.querySelector(`[data-foto="${f.id}"]`);
+        if (img && src) { img.src = src; img.classList.remove('foto-cargando'); }
+      };
+      if (src) { pintar(); return; }
+      src = await Store.fetchPhoto(f);
+      pintar();
     });
   }
 
@@ -3967,7 +3978,8 @@
     const nacimiento = new Date(now - 35 * DIA);
     const d = {
       version: 1,
-      bebe: { nombre: 'Emma', nacimiento: nacimiento.toISOString().slice(0, 10), hora: '08:15', mama: 'Ana', papa: 'Leo' },
+      // hora 00:00 → la edad mostrada siempre cae en 35 días exactos, sin importar la hora del día
+      bebe: { nombre: 'Emma', nacimiento: nacimiento.toISOString().slice(0, 10), hora: '00:00', mama: 'Ana', papa: 'Leo' },
       tomas: [], suenos: [], panales: [], condiciones: [], intervenciones: [], medicamentos: [],
       crecimiento: [], fotos: [], actividades: [], banco: [], citas: [], rutina: null, borrados: [],
     };
@@ -4100,5 +4112,5 @@
   } catch (e) { console.error('Enlace de configuración no válido', e); }
 
   if (Store.hasSession()) iniciarApp();
-  else $('#login-screen').classList.remove('hidden');
+  else { const ls = $('#login-screen'); ls.classList.remove('hidden'); I18N.aplicar(ls); }
 })();

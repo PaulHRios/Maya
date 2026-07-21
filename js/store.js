@@ -204,12 +204,25 @@ const Store = (() => {
   let modoDemo = false;
   let bebeActivo = localStorage.getItem(LS_BEBE_ACTIVO) || 'maya';
 
+  // el demo se reinicia solo: si alguien lo llena de datos, a la media hora
+  // vuelve al default para el siguiente que lo pruebe (y la edad queda fija).
+  // Súbele la versión para forzar el re-seed tras un cambio (p. ej. fotos nuevas).
+  const DEMO_VER = 3;
+  const DEMO_TTL = 30 * 60 * 1000; // 30 minutos
   function activarDemo(seed) {
     modoDemo = true;
     bebeActivo = 'demo';                     // claves propias: jamás toca datos reales
     localStorage.setItem(LS_SESSION, 'ok');  // el demo entra directo
-    if (!localStorage.getItem(kData('demo')) && seed) {
+    let reseed = !localStorage.getItem(kData('demo'));
+    try {
+      const meta = JSON.parse(localStorage.getItem('maya.demo-meta.v1') || 'null');
+      if (!meta || meta.ver !== DEMO_VER || (Date.now() - (meta.at || 0)) > DEMO_TTL) reseed = true;
+    } catch { reseed = true; }
+    if (seed && reseed) {
       localStorage.setItem(kData('demo'), JSON.stringify(seed));
+      localStorage.removeItem(kTimers('demo'));   // limpia timers del intento anterior
+      localStorage.removeItem(kAvatar('demo'));
+      localStorage.setItem('maya.demo-meta.v1', JSON.stringify({ ver: DEMO_VER, at: Date.now() }));
     }
   }
   const kData = id => id === 'maya' ? LS_DATA : `${LS_DATA}.${id}`;
@@ -478,7 +491,7 @@ const Store = (() => {
         b64 = await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
       }
       foto.dataUrl = `data:image/jpeg;base64,${b64.replace(/\n/g, '')}`;
-      localStorage.setItem(LS_DATA, JSON.stringify(data));
+      localStorage.setItem(kData(bebeActivo), JSON.stringify(data));
       return foto.dataUrl;
     } catch (e) { console.error('Foto no disponible', e); return null; }
   }
