@@ -195,7 +195,17 @@ body {
   font-size: 12px; font-weight: 700; color: var(--text);
   cursor: pointer; box-shadow: var(--shadow); background: var(--card);
 }
-.quick-btn span:first-child { font-size: 26px; }
+/* círculo con tinte por acción: color = categoría, más fácil de ubicar */
+.quick-btn span:first-child {
+  font-size: 24px; width: 46px; height: 46px; margin-bottom: 2px;
+  display: flex; align-items: center; justify-content: center; border-radius: 50%;
+}
+.quick-btn[data-accion="toma-izq"] span:first-child,
+.quick-btn[data-accion="toma-der"] span:first-child { background: color-mix(in srgb, var(--pink) 15%, transparent); }
+.quick-btn[data-accion="dormir"] span:first-child { background: color-mix(in srgb, #8b6ef0 15%, transparent); }
+.quick-btn[data-accion="panal-pipi"] span:first-child { background: color-mix(in srgb, #4a97e8 15%, transparent); }
+.quick-btn[data-accion="panal-popo"] span:first-child { background: color-mix(in srgb, #c8963c 18%, transparent); }
+.quick-btn[data-accion="biberon"] span:first-child { background: color-mix(in srgb, #e0a37a 20%, transparent); }
 .quick-btn:active { transform: scale(.96); }
 
 /* segmento */
@@ -898,10 +908,11 @@ canvas.chart { width: 100% !important; }
 
 /* listón del demo público */
 .demo-liston {
-  position: fixed; bottom: calc(74px + var(--safe-bottom)); left: 50%; transform: translateX(-50%);
-  z-index: 25; background: #2b2330; color: #ffd166;
-  font-size: 11px; font-weight: 800; padding: 5px 14px; border-radius: 100px;
-  box-shadow: 0 4px 14px rgba(0,0,0,.25); white-space: nowrap; pointer-events: none;
+  position: fixed; bottom: calc(96px + var(--safe-bottom)); left: 50%; transform: translateX(-50%);
+  z-index: 40; background: #2b2330; color: #ffd166;
+  font-size: 12px; font-weight: 800; padding: 7px 16px; border-radius: 100px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.28); white-space: nowrap; pointer-events: none;
+  max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis;
 }
 .demo-liston.clickeable { pointer-events: auto; cursor: pointer; border: none; }
 .demo-liston.clickeable u { color: #ffd166; text-underline-offset: 2px; }
@@ -991,7 +1002,7 @@ canvas.chart { width: 100% !important; }
 .tab .tab-icon { transition: transform .3s var(--spring), filter .2s; }
 .main { padding-bottom: calc(118px + var(--safe-bottom)); }
 /* cuando el listón de demo está visible, deja aire extra para que no tape contenido */
-body:has(.demo-liston) .main { padding-bottom: calc(150px + var(--safe-bottom)); }
+body:has(.demo-liston) .main { padding-bottom: calc(175px + var(--safe-bottom)); }
 
 /* transición al cambiar de pestaña */
 .main.cambio { animation: vista-in .32s var(--suave); }
@@ -1015,7 +1026,18 @@ body:has(.demo-liston) .main { padding-bottom: calc(150px + var(--safe-bottom));
 @keyframes toast-spring { 0% { opacity: 0; transform: translate(-50%, 16px) scale(.92); } }
 
 /* login: blobs flotantes de fondo + corazón latiendo */
-.login-screen { position: relative; overflow: hidden; }
+.login-screen { position: relative; overflow-x: hidden; overflow-y: auto; }
+.lang-toggle {
+  position: absolute; z-index: 4;
+  top: calc(14px + env(safe-area-inset-top)); right: 16px;
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,.82); backdrop-filter: blur(12px);
+  border: 1.5px solid var(--borde); border-radius: 100px;
+  padding: 8px 14px; font-size: 13.5px; font-weight: 700; color: var(--text);
+  cursor: pointer; box-shadow: var(--sombra-1); transition: transform .15s var(--spring);
+}
+.lang-toggle:active { transform: scale(.94); }
+:root[data-tema="noche"] .lang-toggle { background: rgba(38,32,48,.85); }
 .login-screen::before, .login-screen::after {
   content: ''; position: absolute; border-radius: 50%; filter: blur(70px); opacity: .55;
   animation: blob-flota 16s ease-in-out infinite alternate; pointer-events: none;

@@ -208,9 +208,9 @@
       <div class="stats-grid">
         <div class="stat-card bg-peach">
           <span class="stat-emoji">🍼</span>
-          <span class="stat-value">${tomasHoy.length} tomas</span>
+          <span class="stat-value">${tomasHoy.length} ${enI ? (tomasHoy.length === 1 ? 'feed' : 'feeds') : 'tomas'}</span>
           <span class="stat-label">${mlHoy ? `${mlHoy} ml` : ''}${mlHoy && minPechoHoy ? ' · ' : ''}${minPechoHoy ? `${minPechoHoy} min ${enI ? 'breast' : 'pecho'}` : (mlHoy ? '' : (enI ? 'today' : 'hoy'))}</span>
-          <span class="stat-ago">${ultToma ? `última ${hace(ultToma.inicio)}` : ''}</span>
+          <span class="stat-ago">${ultToma ? (enI ? `last ${hace(ultToma.inicio)}` : `última ${hace(ultToma.inicio)}`) : ''}</span>
         </div>
         <div class="stat-card bg-yellow">
           <span class="stat-emoji">🧷</span>
@@ -3154,7 +3154,12 @@
     $('#a-logout').onclick = () => {
       Store.logout();
       sessionStorage.setItem('maya.ir-login', '1');
-      location.reload();
+      // salir del demo: hay que quitar el ?demo=1 de la URL, si no vuelve a entrar
+      if (Store.modoDemo || new URLSearchParams(location.search).has('demo')) {
+        location.href = location.pathname;
+      } else {
+        location.reload();
+      }
     };
   }
 
@@ -3951,6 +3956,13 @@
   if (btnCrear) btnCrear.onclick = hojaCrearCuenta;
   const btnDemo = $('#btn-ver-demo');
   if (btnDemo) btnDemo.onclick = () => { location.href = `${location.pathname}?demo=1`; };
+  // 🌐 en la pantalla de presentación: cambia idioma (muestra el idioma al que cambiaría)
+  const btnIdiomaLogin = $('#btn-idioma-login');
+  if (btnIdiomaLogin) {
+    const lbl = $('#lang-toggle-label');
+    if (lbl) lbl.textContent = I18N.lang === 'en' ? 'Español' : 'English';
+    btnIdiomaLogin.onclick = () => { I18N.set(I18N.lang === 'en' ? 'es' : 'en'); location.reload(); };
+  }
 
   $('#login-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -4084,7 +4096,9 @@
     Store.activarDemo(seedDemo);
     const listaDemo = document.createElement('button');
     listaDemo.className = 'demo-liston clickeable';
-    listaDemo.innerHTML = (I18N.lang === 'en' ? '🧪 DEMO with synthetic data · <u>' + (teniaSesionReal ? 'back to my account' : 'sign in or create account') : '🧪 DEMO con datos sintéticos · <u>' + (teniaSesionReal ? 'volver a mi cuenta' : 'entrar o crear cuenta')) + '</u>';
+    listaDemo.innerHTML = I18N.lang === 'en'
+      ? '🧪 DEMO · <u>' + (teniaSesionReal ? 'back to my account' : 'tap to exit') + '</u>'
+      : '🧪 DEMO · <u>' + (teniaSesionReal ? 'volver a mi cuenta' : 'toca para salir') + '</u>';
     listaDemo.onclick = () => {
       if (!teniaSesionReal) {
         sessionStorage.setItem('maya.ir-login', '1');

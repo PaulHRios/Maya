@@ -6,13 +6,8 @@
 const I18N = (() => {
 
   const LS = 'maya.idioma.v1';
-  let lang = localStorage.getItem(LS) || '';
-  if (!lang) {
-    // visitantes sin sesión (demo público) arrancan en inglés; la familia, en español
-    const esDemo = new URLSearchParams(location.search).has('demo')
-      || (localStorage.getItem('maya.session.v1') !== 'ok' && sessionStorage.getItem('maya.ir-login') !== '1');
-    lang = esDemo ? 'en' : 'es';
-  }
+  // el idioma por defecto es inglés; se puede cambiar a español con el 🌐 (y se recuerda)
+  let lang = localStorage.getItem(LS) || 'en';
 
   const EN = {
     // navegación y encabezado
