@@ -218,15 +218,15 @@
           <span class="stat-label">${enI ? 'used today' : 'gastados hoy'}</span>
           <span class="stat-ago">${ultPanal ? (enI ? `last ${hace(ultPanal.hora)}` : `último ${hace(ultPanal.hora)}`) : ''}</span>
         </div>
-        <div class="stat-card bg-blue">
-          <span class="stat-emoji">💧</span>
-          <span class="stat-value">${pipiHoy} ${enI ? 'pee' : 'pipí'}</span>
-          <span class="stat-label">${enI ? 'today' : 'hoy'}</span>
+      </div>
+      <div class="mini-stats">
+        <div class="mini-stat bg-blue">
+          <span class="ms-emoji">💧</span>
+          <div><span class="ms-value">${pipiHoy}</span> <span class="ms-label">${enI ? 'pee today' : 'pipí hoy'}</span></div>
         </div>
-        <div class="stat-card bg-mint">
-          <span class="stat-emoji">💩</span>
-          <span class="stat-value">${popoHoy} ${enI ? 'poop' : 'popó'}</span>
-          <span class="stat-label">${enI ? 'today' : 'hoy'}</span>
+        <div class="mini-stat bg-mint">
+          <span class="ms-emoji">💩</span>
+          <div><span class="ms-value">${popoHoy}</span> <span class="ms-label">${enI ? 'poop today' : 'popó hoy'}</span></div>
         </div>
       </div>
 
@@ -245,7 +245,7 @@
         <div class="card-row">
           <div>
             <div style="font-weight:700">${descToma(ultToma)}</div>
-            ${ultToma ? `<div style="font-size:13px;color:var(--text-2);margin-top:2px">${fmtDia(ultToma.inicio)} a las ${fmtHora(ultToma.inicio)} · ${hace(ultToma.inicio)}${etiquetaAutor(ultToma)}</div>` : ''}
+            ${ultToma ? `<div style="font-size:13px;color:var(--text-2);margin-top:2px">${fmtDia(ultToma.inicio)} ${I18N.lang === 'en' ? 'at' : 'a las'} ${fmtHora(ultToma.inicio)} · ${hace(ultToma.inicio)}${etiquetaAutor(ultToma)}</div>` : ''}
           </div>
         </div>
       </div>
