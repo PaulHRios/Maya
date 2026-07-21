@@ -254,7 +254,7 @@ const Store = (() => {
 
   function cambiarBebe(id) {
     if (id === bebeActivo) return;
-    localStorage.setItem(kData(bebeActivo), JSON.stringify(data)); // asegurar guardado
+    persistir(bebeActivo, data); // asegurar guardado
     bebeActivo = id;
     localStorage.setItem(LS_BEBE_ACTIVO, id);
     data = emptyData();
@@ -296,11 +296,28 @@ const Store = (() => {
     } catch (e) { console.error('Error cargando datos locales', e); }
   }
 
+  // guarda en localStorage sin reventar la cuota: las fotos YA sincronizadas
+  // se guardan sin su dataUrl (se pueden volver a bajar del repo). Si aún así
+  // no cabe, suelta todos los dataUrl. Nunca lanza: devuelve true/false.
+  function persistir(id, d) {
+    const sinSync = f => f.sincronizada && f.dataUrl ? { ...f, dataUrl: undefined } : f;
+    const sinNada = f => f.dataUrl ? { ...f, dataUrl: undefined } : f;
+    for (const trim of [sinSync, sinNada]) {
+      try {
+        const copia = { ...d, fotos: (d.fotos || []).map(trim) };
+        localStorage.setItem(kData(id), JSON.stringify(copia));
+        return true;
+      } catch (e) { /* cuota llena: probamos con menos */ }
+    }
+    console.error('No se pudo guardar en localStorage (cuota llena)');
+    return false;
+  }
+
   function saveLocal() {
-    localStorage.setItem(kData(bebeActivo), JSON.stringify(data));
+    persistir(bebeActivo, data);
     actualizarPerfilActivo();
     notify();
-    scheduleSync();
+    scheduleSync();   // aunque falle el guardado local, se intenta subir al repo
   }
 
   function saveConfig() {
@@ -495,7 +512,7 @@ const Store = (() => {
         b64 = await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
       }
       foto.dataUrl = `data:image/jpeg;base64,${b64.replace(/\n/g, '')}`;
-      localStorage.setItem(kData(bebeActivo), JSON.stringify(data));
+      persistir(bebeActivo, data);
       return foto.dataUrl;
     } catch (e) { console.error('Foto no disponible', e); return null; }
   }
@@ -528,11 +545,11 @@ const Store = (() => {
       await ghPutFile(archivoDatos(idSync), b64encodeUtf8(JSON.stringify(slim, null, 1)), sha, `Registro ${new Date().toLocaleString('es-MX')}`);
       config.lastSync = now();
       saveConfig();
-      localStorage.setItem(kData(idSync), JSON.stringify(data));
+      persistir(idSync, data);
       setSyncState('ok');
       try {
         await syncPhotos();
-        localStorage.setItem(kData(idSync), JSON.stringify(data));
+        persistir(idSync, data);
       } catch (e) {
         console.error('Fotos pendientes de subir', e);
       }
