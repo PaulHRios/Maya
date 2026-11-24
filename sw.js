@@ -2,25 +2,26 @@
    dispositivo y se sincronizan cuando vuelve la conexión). */
 importScripts('./js/reminders.js', './js/push-storage.js');
 
-const CACHE = 'maya-v21';
+const CACHE = 'maya-v22';
 const ARCHIVOS = [
   './',
   './index.html',
-  './css/styles.css',
+  './demo.html',
+  './css/styles.css?v=22',
   './js/i18n.js',
-  './js/store.js',
+  './js/store.js?v=22',
   './js/reminders.js',
   './js/photo-thumbs.js',
-  './js/push-config.js',
+  './js/push-config.js?v=22',
   './js/push-storage.js',
-  './js/push-client.js',
+  './js/push-client.js?v=22',
   './js/actividades.js',
   './js/analisis.js',
   './js/epds.js',
   './js/info.js',
   './js/pdf.js',
   './js/demo-fotos.js',
-  './js/app.js',
+  './js/app.js?v=22',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -31,7 +32,9 @@ const ARCHIVOS = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS.map(file =>
+    new Request(file, { cache: 'reload' })
+  ))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -47,9 +50,11 @@ self.addEventListener('fetch', e => {
   // Cache the app shell only; private GitHub/API/raw responses must never enter it.
   if (url.origin !== self.location.origin) return;
   if (e.request.method !== 'GET') return;
+  const scope = self.registration.scope;
+  if (!ARCHIVOS.some(file => new URL(file, scope).pathname === url.pathname)) return;
 
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then(res => {
         if (res.ok) {
           const copia = res.clone();
@@ -57,7 +62,18 @@ self.addEventListener('fetch', e => {
         }
         return res;
       })
-      .catch(() => caches.match(e.request, { ignoreSearch: true }))
+      .catch(async () => {
+        const cache = await caches.open(CACHE);
+        const exact = await cache.match(e.request);
+        // Only unversioned app navigation can reuse an entry with different query params.
+        if (exact) return exact;
+        if (e.request.mode === 'navigate') {
+          const page = url.pathname === new URL('./demo.html', scope).pathname ? './demo.html' : './index.html';
+          return (await cache.match(page)) || Response.error();
+        }
+        // An obsolete client may still request old names; never substitute a different version.
+        return Response.error();
+      })
   );
 });
 

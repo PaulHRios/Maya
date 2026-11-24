@@ -4357,7 +4357,27 @@
 
   // service worker para que funcione sin internet y se pueda instalar
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    const sw = navigator.serviceWorker;
+    let knownController = sw.controller;
+    sw.addEventListener('controllerchange', () => {
+      const previous = knownController;
+      knownController = sw.controller;
+      if (!previous || !knownController || previous === knownController) return;
+      const button = $('#maya-update');
+      if (!button) return;
+      button.textContent = remText('Actualizar Maya', 'Update Maya');
+      button.onclick = () => location.reload();
+      button.classList.remove('hidden');
+    });
+    const checkAppUpdate = reg => {
+      let lastAttempt = Date.now();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible' || Date.now() - lastAttempt < 60000) return;
+        lastAttempt = Date.now();
+        reg.update().catch(() => {});
+      });
+    };
+    sw.register('sw.js', { updateViaCache: 'none' }).then(checkAppUpdate).catch(() => {});
   }
 
   /* ---------- demo público (?demo=1): datos sintéticos, cero nube ---------- */
