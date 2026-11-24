@@ -1162,3 +1162,33 @@ details.card[open] summary::after { transform: rotate(90deg); }
 #home-push-status:not(:empty) { margin: 5px 3px 2px; color: var(--text); font-size: 12px; }
 
 #maya-update { position: fixed; z-index: 8; right: 12px; bottom: calc(76px + var(--safe-bottom)); max-width: calc(100% - 24px); min-height: 44px; box-shadow: var(--shadow); }
+
+.rem-settings-sheet { display: grid; gap: 12px; }
+.rem-settings-sheet h2, .rem-settings-sheet p { margin: 0; }
+.rem-heading { display: grid; gap: 5px; }
+.rem-settings-sheet p { color: var(--text-2); line-height: 1.4; }
+.rem-options { display: grid; gap: 0; border: 1px solid var(--borde); border-radius: 15px; overflow: hidden; }
+.rem-option { padding: 3px 10px 7px; min-width: 0; }
+.rem-option + .rem-option { border-top: 1px solid var(--borde); }
+.rem-option:last-child { padding-bottom: 3px; }
+.rem-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; font-weight: 650; font-size: 14px; cursor: pointer; }
+.rem-switch-row span { min-width: 0; overflow-wrap: anywhere; }
+.rem-switch-row .rem-switch { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 42px; height: 24px; margin: 0; padding: 0; border: 1px solid var(--text-2); border-radius: 20px; background: var(--seg); cursor: pointer; }
+.rem-switch-row .rem-switch::after { content: ''; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-2); }
+.rem-switch-row .rem-switch:checked { background: var(--pink-deep); border-color: var(--pink-deep); }
+.rem-switch-row .rem-switch:checked::after { transform: translateX(18px); background: white; }
+.rem-switch-row .rem-switch:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.rem-settings-sheet .rem-number { margin: 0 0 3px; }
+.rem-settings-sheet .rem-number input, .rem-hours input { min-width: 0; max-width: 100%; font-size: 16px; }
+.rem-quiet { min-width: 0; padding: 0 10px 10px; display: grid; gap: 6px; border-radius: 15px; background: var(--pink-soft); }
+.rem-hours { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.rem-hours label { min-width: 0; display: grid; gap: 4px; color: var(--text); font-size: 12px; }
+.rem-hours input { display: block; width: 100%; min-height: 44px; box-sizing: border-box; padding-inline: 6px; }
+.rem-hours input::-webkit-date-and-time-value { margin: 0; min-height: 1.2em; text-align: start; }
+.rem-push-sheet #rem-push-status:empty { display: none; }
+@media (max-width: 350px) { .rem-hours { grid-template-columns: minmax(0, 1fr); } }
+.rem-switch-row span svg { vertical-align: -.18em; margin-inline-end: 6px; }
+.rem-settings-sheet .rem-number input { flex: 0 0 65px; margin: 0; padding: 7px 4px; text-align: center; border: 1px solid var(--borde); border-radius: 9px; background: var(--bg); color: var(--text); }
+.rem-privacy { color: var(--text); font-size: 13px; }
+.rem-privacy summary { cursor: pointer; padding: 7px 0; }
+.rem-privacy p { padding: 0 0 6px; }

@@ -112,7 +112,7 @@ const MayaPush = (() => {
       catch(e) { if(e.status===401 || e.status===404) save(null); }
     } finally { revoking=false; }
   }
-  const sig=j=>JSON.stringify([j.id,j.dueAt,j.deadline,j.prefs,j.lang,j.name]);
+  const sig=j=>JSON.stringify([j.id,j.dueAt,j.deadline,j.prefs,j.lang,j.name,!!j.windDown]);
   function setDesired({owner,scope,plan,dismissed,options,name,lang,allowNetwork=true}) {
     if (!configured || !platform()) return;
     const c=read();
@@ -154,7 +154,7 @@ const MayaPush = (() => {
           if(last) {jobs.push(last);continue;}
           if(j.at>=j.expires || j.expires<=now) continue;
           jobs.push({id:rand(),at:j.at,expiresAt:j.expires,signature:sig(j),localKey:j.id,
-            type:j.type,since:j.since,week:j.week,name:j.name,lang:j.lang,prefs:j.prefs});
+            type:j.type,windDown:!!j.windDown,since:j.since,week:j.week,name:j.name,lang:j.lang,prefs:j.prefs});
         }
         return {write:{owner:c.owner,deviceId:c.deviceId,scope,jobs,completed:map},
           value:jobs.filter(j=>!j.delivered && j.expiresAt>now).map(({id,at,expiresAt})=>({id,at,expiresAt}))};

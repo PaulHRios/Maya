@@ -3077,6 +3077,9 @@
       `Hace ${elapsed} que no registras popó de ${name}.`, `It’s been ${elapsed} since ${name}’s last logged dirty diaper.`);
     if (a.type === 'wet') return remText(
       `Hace ${elapsed} que no registras pipí de ${name}.`, `It’s been ${elapsed} since ${name}’s last logged wet diaper.`);
+    if (a.type === 'sleep' && a.windDown) return remText(
+      `La ventana de sueño de ${name} se acerca. Puedes empezar a bajar la luz y el ruido.`,
+      `${name}’s sleep window is approaching. You can start dimming the lights and lowering noise.`);
     if (a.type === 'sleep') return remText(
       `${name} lleva ${elapsed} despierta según el registro. Revisa su ventana de sueño.`, `${name} has been awake for ${elapsed} based on your logs. Check the wake window.`);
     return remText(
@@ -3087,10 +3090,13 @@
     if (Store.modoDemo || !MayaPush.configured || !Store.pushOwner()
       || (!Store.pushEnrollmentEligible() && !MayaPush.enabled(Store.pushOwner()))) return '';
     const support = MayaPush.support(), on = MayaPush.enabled(Store.pushOwner());
-    return `<div class="card reminders-card" id="background-push-settings">
-      <h2>📲 ${remText('Avisos con la app cerrada','Reminders while the app is closed')}</h2>
-      <p>${remText('Se agendan con los últimos registros que vio este dispositivo. Lo anotado en otro teléfono no cambia el aviso hasta que esta app vuelva a sincronizar.','Scheduled from this device’s latest logs. Entries on another phone cannot cancel its scheduled reminders until this app syncs again.')}</p>
-      <p>${remText('El servidor recibe solo identificadores aleatorios y horarios, además de la suscripción de notificaciones. El texto se prepara aquí y puede verse en la pantalla bloqueada.','The scheduler receives only random IDs, times, and your push subscription. Notification text is prepared here and may appear on the lock screen.')}</p>
+    return `<div class="card reminders-card rem-settings-sheet rem-push-sheet" id="background-push-settings">
+      <h2>${remText('Avisos con la app cerrada','Reminders while Maya is closed')}</h2>
+      <p>${remText('Los avisos se actualizan cuando Maya sincroniza los registros en este dispositivo.','Reminders update when Maya syncs the logs on this device.')}</p>
+      <details class="rem-privacy">
+        <summary>${remText('Privacidad de los avisos', 'Reminder privacy')}</summary>
+        <p>${remText('El servidor recibe solo la suscripción, identificadores aleatorios y horarios. El texto se prepara en este dispositivo y puede verse en la pantalla bloqueada.', 'The scheduler receives only the subscription, random IDs and times. This device prepares the text, which may appear on the lock screen.')}</p>
+      </details>
       ${on || support==='ready' ? `<button class="btn-secondary btn-block" id="rem-push-toggle" type="button">${on
         ? remText('Desactivar avisos con la app cerrada','Turn off closed-app reminders')
         : remText('Activar notificaciones','Enable notifications')}</button>` : ''}
@@ -3101,28 +3107,33 @@
   }
   function remCard() {
     const p = remPrefs();
-    const check = (k, label) => `<label class="checkbox-row"><input type="checkbox" name="${k}" ${p[k] ? 'checked' : ''}> ${label}</label>`;
-    const n = (k, label, min, max, step) => `<label class="rem-number">${label}
-      <input aria-label="${label}" name="${k}" type="number" min="${min}" max="${max}" step="${step}" value="${p[k]}"></label>`;
-    return `<form class="card reminders-card" id="rem-settings">
-      <h2>🔔 ${remText('Recordatorios', 'Reminders')}</h2>
-      <p>${remText('En este dispositivo y para este perfil. Los avisos dependen de lo registrado y se revisan con la app abierta; no son alertas médicas.', 'For this profile and device. Reminders reflect your logs and are checked with the app open; they are not medical alerts.')}</p>
-      ${check('sleep', remText('Ventana de sueño', 'Wake window'))}
-      ${n('sleepMinutes', remText('Minutos despierta (0 = guía de la app)', 'Minutes awake (0 = app guide)'), 0, 720, 1)}
-      ${check('feed', remText('Tiempo sin registrar toma', 'Time since last logged feed'))}
-      ${n('feedHours', remText('Horas desde la toma', 'Hours since feed'), .5, 48, .5)}
-      ${check('poop', remText('Tiempo sin registrar popó', 'Time since last logged dirty diaper'))}
-      ${n('poopHours', remText('Horas desde el último pañal con popó', 'Hours since dirty diaper'), 1, 168, 1)}
-      ${check('wet', remText('Tiempo sin registrar pipí', 'Time since last logged wet diaper'))}
-      ${n('wetHours', remText('Horas desde el último pañal con pipí', 'Hours since wet diaper'), 1, 48, 1)}
-      ${check('photo', remText('Foto semanal pendiente', 'Missing weekly photo'))}
-      ${check('quiet', remText('Activar horario de silencio', 'Enable quiet hours'))}
-      <div class="form-row">
-        <label class="form-group">${remText('Desde', 'From')}<input required type="time" name="from" value="${p.from}"></label>
-        <label class="form-group">${remText('Hasta', 'Until')}<input required type="time" name="to" value="${p.to}"></label>
-      </div>
-      <p>${remText('Se usa la hora local; si ambas horas son iguales, no se envían avisos en todo el día.', 'Uses local time; matching times silence reminders all day.')}</p>
-      ${!Store.modoDemo && 'Notification' in window && 'serviceWorker' in navigator ? check('system', remText('Mostrar estos detalles en avisos del sistema (con la app abierta; pueden verse en la pantalla bloqueada)', 'Show details in system notifications (while open; may appear on the lock screen)')) : ''}
+    const moon = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20.8 15.4A9 9 0 018.6 3.2a9 9 0 1012.2 12.2Z"/></svg>';
+    const check = (k, label) => `<label class="rem-switch-row"><span>${k === 'quiet' ? moon : ''}${label}</span>
+      <input class="rem-switch" type="checkbox" name="${k}" ${p[k] ? 'checked' : ''}></label>`;
+    const alert = (k, label, timer) => `<div class="rem-option">${check(k, label)}${timer || ''}</div>`;
+    const n = (k, label, min, max, step) => `<label class="rem-number"><span>${label}</span>
+      <input name="${k}" type="number" inputmode="decimal" min="${min}" max="${max}" step="${step}" value="${p[k]}"></label>`;
+    return `<form class="card reminders-card rem-settings-sheet" id="rem-settings">
+      <header class="rem-heading">
+        <h2>${remText('Recordatorios', 'Reminders')}</h2>
+        <p>${remText('Elige qué avisos quieres recibir en este dispositivo. Se basan en tus registros; no son alertas médicas.', 'Choose your reminders for this device. They’re based on your logs and are not medical alerts.')}</p>
+      </header>
+      <section class="rem-options" aria-label="${remText('Tipos de avisos', 'Reminder types')}">
+        ${alert('sleep', remText('Ventana de sueño', 'Wake window'), n('sleepMinutes', remText('Minutos despierta (0 = aviso por edad)', 'Minutes awake (0 = age-based reminder)'), 0, 720, 1))}
+        ${alert('feed', remText('Toma pendiente', 'Feeding reminder'), n('feedHours', remText('Horas desde la última toma', 'Hours since last feed'), .5, 48, .5))}
+        ${alert('poop', remText('Pañal con popó', 'Dirty diaper'), n('poopHours', remText('Horas desde el último pañal con popó', 'Hours since last dirty diaper'), 1, 168, 1))}
+        ${alert('wet', remText('Pañal con pipí', 'Wet diaper'), n('wetHours', remText('Horas desde el último pañal con pipí', 'Hours since last wet diaper'), 1, 48, 1))}
+        ${alert('photo', remText('Foto semanal pendiente', 'Weekly photo reminder'))}
+      </section>
+      <section class="rem-quiet">
+        ${check('quiet', remText('No molestar', 'Do not disturb'))}
+        <div class="rem-hours">
+          <label><span>${remText('Desde', 'From')}</span><input required type="time" name="from" value="${p.from}"></label>
+          <label><span>${remText('Hasta', 'Until')}</span><input required type="time" name="to" value="${p.to}"></label>
+        </div>
+        <p>${remText('Hora local. Si las horas son iguales, se silencian los avisos todo el día.', 'Local time. Matching times silence reminders all day.')}</p>
+      </section>
+      ${!Store.modoDemo && 'Notification' in window && 'serviceWorker' in navigator ? `<div class="rem-option">${check('system', remText('Avisos del sistema con la app abierta', 'System alerts while Maya is open'))}<p>${remText('Los detalles pueden verse en la pantalla bloqueada.', 'Details may appear on the lock screen.')}</p></div>` : ''}
       <button class="btn-primary btn-block" type="submit">${remText('Guardar recordatorios', 'Save reminders')}</button>
     </form>`;
   }

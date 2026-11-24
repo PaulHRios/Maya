@@ -1,27 +1,27 @@
 /* Service worker: deja usar la app sin internet (los datos viven en el
    dispositivo y se sincronizan cuando vuelve la conexión). */
-importScripts('./js/reminders.js', './js/push-storage.js');
+importScripts('./js/reminders.js?v=23', './js/push-storage.js');
 
-const CACHE = 'maya-v22';
+const CACHE = 'maya-v23';
 const ARCHIVOS = [
   './',
   './index.html',
   './demo.html',
-  './css/styles.css?v=22',
+  './css/styles.css?v=23',
   './js/i18n.js',
   './js/store.js?v=22',
-  './js/reminders.js',
+  './js/reminders.js?v=23',
   './js/photo-thumbs.js',
   './js/push-config.js?v=22',
   './js/push-storage.js',
-  './js/push-client.js?v=22',
+  './js/push-client.js?v=23',
   './js/actividades.js',
   './js/analisis.js',
   './js/epds.js',
   './js/info.js',
   './js/pdf.js',
   './js/demo-fotos.js',
-  './js/app.js?v=22',
+  './js/app.js?v=23',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -95,6 +95,7 @@ function pushBody(job, now) {
   if(job.type==='feed') return en ? 'It’s been '+elapsed+' since '+name+'’s last logged feed.' : 'Hace '+elapsed+' que no registras una toma de '+name+'.';
   if(job.type==='poop') return en ? 'It’s been '+elapsed+' since '+name+'’s last logged dirty diaper.' : 'Hace '+elapsed+' que no registras popó de '+name+'.';
   if(job.type==='wet') return en ? 'It’s been '+elapsed+' since '+name+'’s last logged wet diaper.' : 'Hace '+elapsed+' que no registras pipí de '+name+'.';
+  if(job.type==='sleep' && job.windDown) return en ? name+'’s sleep window is approaching. You can start dimming the lights and lowering noise.' : 'La ventana de sueño de '+name+' se acerca. Puedes empezar a bajar la luz y el ruido.';
   return en ? name+' has been awake for '+elapsed+' based on your logs. Check the wake window.' : name+' lleva '+elapsed+' despierta según el registro. Revisa su ventana de sueño.';
 }
 

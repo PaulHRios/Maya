@@ -4,7 +4,7 @@ const MayaReminders = (() => {
   const defaults = Object.freeze({
     sleep: false, feed: false, poop: false, wet: false, photo: false,
     sleepMinutes: 0, feedHours: 4, poopHours: 24, wetHours: 6,
-    quiet: true, from: '21:00', to: '08:00', system: false,
+    quiet: true, from: '21:00', to: '09:00', system: false,
   });
   const bound = (n, min, max, fallback) => n !== '' && n != null && Number.isFinite(+n)
     ? Math.max(min, Math.min(max, +n)) : fallback;
@@ -37,6 +37,8 @@ const MayaReminders = (() => {
       return filter(e) && t <= limit && (!Number.isFinite(max) || t > max) ? t : max;
     }, NaN);
   }
+  const windDownLead = 15 * MINUTE;
+  const automaticLimit = sleepMin => Number.isFinite(sleepMin) && sleepMin > 0 && sleepMin < 1440 ? sleepMin * MINUTE : NaN;
   function due({ data, timers = {}, prefs: raw, now = Date.now(), sleepMin, week }) {
     const prefs = settings(raw);
     if (!data || isQuiet(prefs, new Date(now))) return [];
@@ -56,7 +58,13 @@ const MayaReminders = (() => {
       const previous = latest(data.suenos, 'fin', now, s => s.tipo !== 'vigilia');
       const since = Math.max(wake <= now ? wake : -Infinity, Number.isFinite(previous) ? previous : -Infinity);
       // Snooze stale wake-window alerts if the last logged wake was ages ago.
-      if (now - since < DAY) event('sleep', since, (prefs.sleepMinutes || sleepMin) * MINUTE);
+      if (prefs.sleepMinutes > 0) {
+        if (now - since < DAY) event('sleep', since, prefs.sleepMinutes * MINUTE);
+      } else {
+        const limit = automaticLimit(sleepMin), elapsed = now - since;
+        if (prefs.sleep && Number.isFinite(since) && elapsed >= Math.max(0, limit - windDownLead) && elapsed < limit)
+          r.push({type:'sleep',id:'sleep:'+since,elapsed,windDown:true});
+      }
     }
     if (prefs.photo && Number.isInteger(week) && week >= 0 &&
       !(data.fotos || []).some(p => p.categoria !== 'panal' && Number.isInteger(p.semana) && p.semana === week)) {
@@ -77,11 +85,11 @@ const MayaReminders = (() => {
   function pushPlan({data, timers = {}, prefs:raw, now = Date.now(), sleepMin, week, weekStart, weekEnd}) {
     const prefs = settings(raw), out = [];
     if (!data) return out;
-    function add(type, key, dueAt, deadline) {
+    function add(type, key, dueAt, deadline, windDown = false) {
       if (!prefs[type] || !Number.isFinite(dueAt) || !Number.isFinite(deadline) || deadline <= now) return;
       const at = nextAllowed(prefs, Math.max(dueAt, now + 15000));
       if (at === null || at >= deadline || at > now + 14*DAY) return;
-      out.push({id:type + ':' + key, type, since:type === 'photo' ? null : key,
+      out.push({...(windDown ? {windDown:true} : {}),id:type + ':' + key, type, since:type === 'photo' ? null : key,
         week:type === 'photo' ? key : null, dueAt, at, deadline, expires:Math.min(at + 15*MINUTE, deadline)});
     }
     const span = (type, since, elapsed, stale) => {
@@ -96,8 +104,13 @@ const MayaReminders = (() => {
       const wake = timestamp(timers.vigilia?.inicio);
       const previous = latest(data.suenos,'fin',now,s => s.tipo !== 'vigilia');
       const since = Math.max(wake <= now ? wake : -Infinity, Number.isFinite(previous) ? previous : -Infinity);
-      const duration = (prefs.sleepMinutes || sleepMin)*MINUTE;
-      if (duration < DAY) span('sleep',since,duration,DAY-duration);
+      if (prefs.sleepMinutes > 0) {
+        const duration = prefs.sleepMinutes * MINUTE;
+        if (duration < DAY) span('sleep',since,duration,DAY-duration);
+      } else {
+        const limit = automaticLimit(sleepMin);
+        add('sleep',since,since+Math.max(0,limit-windDownLead),since+limit,true);
+      }
     }
     if (Number.isInteger(week) && week >= 0 && weekStart <= now && now < weekEnd &&
       !(data.fotos || []).some(p => p.categoria !== 'panal' && p.semana === week)) {
