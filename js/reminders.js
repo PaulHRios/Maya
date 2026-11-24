@@ -39,15 +39,24 @@ const MayaReminders = (() => {
   }
   const windDownLead = 15 * MINUTE;
   const automaticLimit = sleepMin => Number.isFinite(sleepMin) && sleepMin > 0 && sleepMin < 1440 ? sleepMin * MINUTE : NaN;
+  function pumpingReminder(timer) {
+    const start = timestamp(timer?.inicio), minutes = timer?.reminderMinutes;
+    if (!Number.isFinite(start) || !Number.isInteger(minutes) || minutes < 1 || minutes > 120) return null;
+    const dueAt = start + minutes * MINUTE;
+    return {id:'pump:'+start+':'+minutes, since:start, dueAt, deadline:dueAt+10*MINUTE};
+  }
   function due({ data, timers = {}, prefs: raw, now = Date.now(), sleepMin, week }) {
     const prefs = settings(raw);
-    if (!data || isQuiet(prefs, new Date(now))) return [];
+    if (!data) return [];
     const r = [];
     function event(type, when, span) {
       // No records, no reminder. Prevents interpreting missing history as a health event.
       if (prefs[type] && Number.isFinite(when) && Number.isFinite(span) && span > 0 && now - when >= span)
         r.push({ type, id: type + ':' + when, elapsed: now - when });
     }
+    const pump = pumpingReminder(timers.extraccion);
+    if (pump && pump.since <= now && pump.dueAt <= now && now < pump.deadline) r.push({id:pump.id,type:'pump'});
+    if (isQuiet(prefs, new Date(now))) return r;
     if (!timers.toma) event('feed', latest(data.tomas, 'inicio', now), prefs.feedHours * HOUR);
     const diaper = (type, span) => event(type, latest(data.panales, 'hora', now,
       p => p.tipo === ({ poop: 'popo', wet: 'pipi' })[type] || p.tipo === 'mixto'), span * HOUR);
@@ -96,6 +105,12 @@ const MayaReminders = (() => {
       if (Number.isFinite(since) && Number.isFinite(elapsed) && elapsed > 0)
         add(type, since, since + elapsed, since + elapsed + stale);
     };
+    const pump = pumpingReminder(timers.extraccion);
+    if (pump && pump.since <= now && now < pump.deadline) {
+      const at = Math.max(pump.dueAt, now+15000);
+      if (at < pump.deadline)
+        out.push({...pump,type:'pump',at,expires:pump.deadline});
+    }
     if (!timers.toma) span('feed', latest(data.tomas,'inicio',now), prefs.feedHours*HOUR, DAY);
     const diaper = (type, hours, kind) => span(type, latest(data.panales,'hora',now,
       p => p.tipo === kind || p.tipo === 'mixto'), hours*HOUR, DAY);

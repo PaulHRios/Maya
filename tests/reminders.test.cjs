@@ -94,3 +94,28 @@ test('quiet hours defer automatic wind-down only if it still precedes the wake-w
   assert.deepEqual(R.pushPlan(expired),[]);
   assert.deepEqual(R.due({...expired,now:+new Date(2026,10,24,9)}),[]);
 });
+
+test('pumping reminder is optional, measured from session start, and stops when the timer ends', () => {
+  const now=+date, inicio=new Date(now).toISOString(), prefs={quiet:false};
+  const chosen={extraccion:{inicio,reminderMinutes:15}};
+  const opt={data:{},prefs,now};
+  assert.deepEqual(R.pushPlan({...opt,timers:{extraccion:{inicio}}}),[]);
+  assert.deepEqual(R.due({...opt,timers:chosen}),[]);
+  const job=R.pushPlan({...opt,timers:chosen})[0];
+  assert.equal(job.type,'pump');assert.equal(job.at,now+15*60000);
+  assert.equal(R.due({...opt,now:job.at,timers:chosen})[0].type,'pump');
+  assert.deepEqual(R.pushPlan({...opt,now:job.at,timers:{}}),[]);
+  assert.deepEqual(R.due({...opt,now:job.at,timers:{}}),[]);
+  assert.deepEqual(R.pushPlan({...opt,now:job.deadline,timers:chosen}),[]);
+  assert.deepEqual(R.due({...opt,now:job.deadline,timers:chosen}),[]);
+});
+test('only the selected pumping reminder bypasses Maya quiet hours at midnight',()=>{
+  const now=+new Date(2026,10,24,23,55), due=+new Date(2026,10,25,0,5);
+  const opt={data:{tomas:[{inicio:new Date(now-6*3600000).toISOString()}]},
+    prefs:{feed:true},timers:{extraccion:{inicio:new Date(now).toISOString(),reminderMinutes:10}}};
+  const jobs=R.pushPlan({...opt,now});
+  assert.equal(jobs.find(j=>j.type==='pump').at,due);
+  assert.equal(new Date(jobs.find(j=>j.type==='feed').at).getHours(),9);
+  assert.deepEqual(R.due({...opt,now:due}).map(j=>j.type),['pump']);
+  assert.deepEqual(R.due({...opt,now:+new Date(2026,10,25,0,15)}),[]);
+});

@@ -5,13 +5,13 @@ test('shell updates revalidate, private requests bypass, offline assets match ex
   const ctx=vm.createContext({URL,Response,importScripts:()=>{},
     self:{location:{origin},registration:{scope},addEventListener:(name,cb)=>events[name]=cb},
     fetch:async(req,opts)=>{called.push(opts.cache);throw Error('offline')},
-    caches:{open:async key=>{assert.equal(key,'maya-v23');return {match:async r=>r.url===scope+'js/app.js?v=23'?offline:typeof r==='string'?r:undefined}}}
+    caches:{open:async key=>{assert.equal(key,'maya-v24');return {match:async r=>r.url===scope+'js/app.js?v=24'?offline:typeof r==='string'?r:undefined}}}
   });
   vm.runInContext(fs.readFileSync(require.resolve('../sw.js'),'utf8'),ctx);
   const result=(url,mode)=>{let promise;events.fetch({request:{url,method:'GET',mode},respondWith:p=>promise=p});return promise};
   assert.equal(await result('https://api.github.com/private'),undefined);
   assert.equal(await result(origin+'/other-app.js'),undefined);
-  assert.equal(await result(scope+'js/app.js?v=23'),offline);
+  assert.equal(await result(scope+'js/app.js?v=24'),offline);
   assert.equal((await result(scope+'js/app.js?v=21')).type,'error');
   assert.equal(await result(scope+'?demo=1','navigate'),'./index.html');
   assert.equal(await result(scope+'demo.html?lang=es','navigate'),'./demo.html');

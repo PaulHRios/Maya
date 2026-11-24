@@ -1192,3 +1192,14 @@ details.card[open] summary::after { transform: rotate(90deg); }
 .rem-privacy { color: var(--text); font-size: 13px; }
 .rem-privacy summary { cursor: pointer; padding: 7px 0; }
 .rem-privacy p { padding: 0 0 6px; }
+
+.pump-reminder { display: grid; gap: 11px; }
+.pump-reminder h2, .pump-reminder p { margin: 0; }
+.pump-reminder p { color: var(--text-2); font-size: 13px; }
+.pump-reminder-presets { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.pump-reminder-presets button { min-height: 44px; min-width: 0; padding-inline: 4px; background: var(--pink-soft); color: var(--text); }
+.pump-reminder-presets button[aria-pressed="true"] { border: 2px solid var(--pink-deep); }
+.pump-reminder-custom { display: grid; align-items: center; grid-template-columns: minmax(0,1fr) 4em auto; gap: 6px; font-size: 13px; }
+.pump-reminder-custom input { min-width: 0; width: 100%; font-size: 16px; min-height: 44px; }
+.pump-reminder-custom button, .pump-reminder #pump-reminder-none { min-height: 44px; }
+.pump-reminder-note { padding: 8px; background: var(--pink-soft); border-radius: 10px; }

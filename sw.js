@@ -1,16 +1,16 @@
 /* Service worker: deja usar la app sin internet (los datos viven en el
    dispositivo y se sincronizan cuando vuelve la conexión). */
-importScripts('./js/reminders.js?v=23', './js/push-storage.js');
+importScripts('./js/reminders.js?v=24', './js/push-storage.js');
 
-const CACHE = 'maya-v23';
+const CACHE = 'maya-v24';
 const ARCHIVOS = [
   './',
   './index.html',
   './demo.html',
-  './css/styles.css?v=23',
+  './css/styles.css?v=24',
   './js/i18n.js',
   './js/store.js?v=22',
-  './js/reminders.js?v=23',
+  './js/reminders.js?v=24',
   './js/photo-thumbs.js',
   './js/push-config.js?v=22',
   './js/push-storage.js',
@@ -21,7 +21,7 @@ const ARCHIVOS = [
   './js/info.js',
   './js/pdf.js',
   './js/demo-fotos.js',
-  './js/app.js?v=23',
+  './js/app.js?v=24',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -91,6 +91,7 @@ function pushBody(job, now) {
   const en=job.lang==='en', name=String(job.name || (en ? 'your baby' : 'tu bebé')).slice(0,80);
   const minutes=Math.max(0,Math.floor((now-job.since)/60000));
   const elapsed=minutes>=60 ? Math.floor(minutes/60)+' h'+(minutes%60?' '+minutes%60+' min':'') : minutes+' min';
+  if(job.type==='pump') return en ? 'Your pumping reminder time is up.' : 'Se cumplió el tiempo que elegiste para la extracción.';
   if(job.type==='photo') return en ? name+'’s week '+job.week+' photo is still missing.' : 'Falta la foto de '+name+' de la semana '+job.week+'.';
   if(job.type==='feed') return en ? 'It’s been '+elapsed+' since '+name+'’s last logged feed.' : 'Hace '+elapsed+' que no registras una toma de '+name+'.';
   if(job.type==='poop') return en ? 'It’s been '+elapsed+' since '+name+'’s last logged dirty diaper.' : 'Hace '+elapsed+' que no registras popó de '+name+'.';
@@ -108,7 +109,7 @@ self.addEventListener('push', event => {
     const job=await MayaPushStorage.change(state=>{
       const entry=state?.jobs?.find(j=>j.id===id);
       if(!entry || entry.delivered || now<entry.at-10000 || now>=entry.expiresAt ||
-        MayaReminders.isQuiet(entry.prefs,new Date(now))) return {value:null};
+        (entry.type !== 'pump' && MayaReminders.isQuiet(entry.prefs,new Date(now)))) return {value:null};
       return {value:entry,write:{...state,jobs:state.jobs.map(j=>j.id===id?{...j,delivered:true}:j)}};
     }).catch(()=>null);
     if(!job) return;

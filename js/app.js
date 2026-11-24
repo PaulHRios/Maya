@@ -1831,6 +1831,47 @@
     Store.setTimers(timers);
     const m = modoExt(modoId);
     toast(m.fases ? `${m.emoji} ${m.nombre}: ${m.fases[0].nombre}, ${m.fases[0].min} min` : '⏱️ Extracción iniciada');
+    hojaAvisoExtraccion();
+  }
+
+  function hojaAvisoExtraccion() {
+    const ext = Store.getTimers().extraccion;
+    if (!ext) return;
+    const scope = Store.photoCacheScope();
+    const background = !Store.modoDemo && MayaPush.enabled(Store.pushOwner());
+    abrirSheet(`
+      <form id="pump-reminder-form" class="pump-reminder">
+        <h2>${remText('Aviso de extracción', 'Pumping reminder')}</h2>
+        <p>${remText('El cronómetro ya arrancó. Elige cuándo quieres un aviso desde el inicio.', 'The timer is already running. Choose when to get a reminder from the start.')}</p>
+        <div class="pump-reminder-presets">
+          ${[10,15,20].map(n=>`<button class="btn-secondary" type="button" data-pump-min="${n}" aria-pressed="${ext.reminderMinutes===n}">${n} min</button>`).join('')}
+        </div>
+        <div class="pump-reminder-custom"><label for="pump-reminder-minutes">${remText('Otros minutos', 'Custom minutes')}</label>
+          <input id="pump-reminder-minutes" name="minutes" type="number" inputmode="numeric" min="1" max="120" step="1" required value="${Number.isInteger(ext.reminderMinutes) ? ext.reminderMinutes : ''}">
+          <button type="submit" class="btn-primary">${remText('Guardar', 'Save')}</button>
+        </div>
+        <button type="button" class="btn-ghost" id="pump-reminder-none">${remText('Sin aviso', 'No reminder')}</button>
+        <p class="pump-reminder-note">${background
+          ? remText('Puede llegar unos minutos después, incluso con Maya cerrada. No aplica el silencio de Maya; tu teléfono sí puede silenciarlo.', 'It can arrive a few minutes later, even with Maya closed. Maya’s quiet hours don’t apply, but your phone can still silence it.')
+          : remText('Verás el aviso en Maya si está abierta, incluso en el horario de silencio de Maya.', 'You’ll see the reminder while Maya is open, even during Maya’s quiet hours.')}</p>
+      </form>`);
+    const form = $('#pump-reminder-form');
+    const apply = minutes => {
+      const timers = Store.getTimers();
+      if (scope !== Store.photoCacheScope() || timers.extraccion?.inicio !== ext.inicio) { cerrarSheet(); return; }
+      if (minutes !== 0 && (!Number.isInteger(minutes) || minutes < 1 || minutes > 120)) return;
+      if (minutes && Date.parse(ext.inicio)+minutes*60000 <= Date.now()) {
+        toast(remText('Elige más minutos: ese tiempo ya pasó.', 'Choose more minutes: that time already passed.'));
+        return;
+      }
+      if (minutes) timers.extraccion.reminderMinutes = minutes;
+      else delete timers.extraccion.reminderMinutes;
+      Store.setTimers(timers);
+      cerrarSheet();
+    };
+    form.querySelectorAll('[data-pump-min]').forEach(b => b.onclick=()=>apply(+b.dataset.pumpMin));
+    $('#pump-reminder-none').onclick=()=>apply(0);
+    form.onsubmit=e=>{e.preventDefault();apply(form.elements.namedItem('minutes').valueAsNumber);};
   }
 
   function terminarExtraccion(cancelar) {
@@ -3071,6 +3112,7 @@
     const name = Store.data.bebe.nombre || remText('tu bebé', 'your baby');
     const elapsed = a.elapsed == null ? '' : fmtDurLarga(a.elapsed);
     const week = semanaActual();
+    if (a.type === 'pump') return remText('Se cumplió el tiempo que elegiste para la extracción.', 'Your pumping reminder time is up.');
     if (a.type === 'feed') return remText(
       `Hace ${elapsed} que no registras una toma de ${name}.`, `It’s been ${elapsed} since ${name}’s last logged feed.`);
     if (a.type === 'poop') return remText(
@@ -3597,6 +3639,7 @@
           <div class="timer-info">${info}
             <span class="timer-clock">${fmtDur(seg)}</span></div>
           <div>
+            <button data-accion="ext-aviso" aria-label="${remText('Configurar aviso', 'Set reminder')}" title="${remText('Configurar aviso', 'Set reminder')}">🔔</button>
             <button data-accion="ext-cancelar">✕</button>
             <button class="stop" data-accion="ext-terminar">■ Terminar</button>
           </div>
@@ -3703,6 +3746,7 @@
         render();
         window.scrollTo(0, 0);
       }
+      if (a === 'ext-aviso') hojaAvisoExtraccion();
       if (a === 'ext-terminar') terminarExtraccion(false);
       if (a === 'ext-cancelar') { if (confirm(I18N.t('¿Cancelar la extracción sin guardar?'))) terminarExtraccion(true); }
       if (a === 'act-terminar') terminarActividad(true);
