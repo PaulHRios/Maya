@@ -2,7 +2,7 @@
    dispositivo y se sincronizan cuando vuelve la conexión). */
 importScripts('./js/reminders.js?v=24', './js/push-storage.js');
 
-const CACHE = 'maya-v24';
+const CACHE = 'maya-v25';
 const ARCHIVOS = [
   './',
   './index.html',
@@ -21,7 +21,7 @@ const ARCHIVOS = [
   './js/info.js',
   './js/pdf.js',
   './js/demo-fotos.js',
-  './js/app.js?v=24',
+  './js/app.js?v=25',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

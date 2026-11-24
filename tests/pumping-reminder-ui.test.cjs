@@ -13,3 +13,14 @@ test('the existing extraction timer starts before the reminder prompt; cancel cl
   env.terminarExtraccion(true);
   assert.equal(timers.extraccion,undefined);
 });
+
+test('choosing the method replaces the same sheet without scheduling an old close',()=>{
+  const code=fs.readFileSync(require.resolve('../js/app.js'),'utf8'), events=[], button={dataset:{metodo:'normal'}};
+  const a=code.indexOf('  function hojaElegirMetodo('), b=code.indexOf('  function iniciarExtraccion(',a);
+  const env=vm.createContext({Object,MODOS_EXTRACCION:{normal:{emoji:'',nombre:'',desc:''}},
+    abrirSheet:()=>events.push('method sheet'),document:{querySelectorAll:()=>[button]},
+    cerrarSheet:()=>events.push('queued close'),iniciarExtraccion:()=>events.push('reminder sheet')});
+  vm.runInContext(code.slice(a,b),env);
+  env.hojaElegirMetodo();button.onclick();
+  assert.deepEqual(events,['method sheet','reminder sheet']);
+});

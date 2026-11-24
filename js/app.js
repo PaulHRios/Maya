@@ -1819,14 +1819,13 @@
       </div>
     `);
     document.querySelectorAll('[data-metodo]').forEach(b => b.onclick = () => {
-      cerrarSheet();
       iniciarExtraccion(b.dataset.metodo);
     });
   }
 
   function iniciarExtraccion(modoId) {
     const timers = Store.getTimers();
-    if (timers.extraccion) { toast('Ya hay una extracción en curso'); return; }
+    if (timers.extraccion) { cerrarSheet(); toast('Ya hay una extracción en curso'); return; }
     timers.extraccion = { inicio: new Date().toISOString(), modo: modoId, faseAvisada: 0 };
     Store.setTimers(timers);
     const m = modoExt(modoId);
