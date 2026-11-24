@@ -119,8 +119,20 @@ const Store = (() => {
     } catch (e) { console.error(e); }
     return true;
   }
-  const hasSession = () => localStorage.getItem(LS_SESSION) === 'ok';
-  const logout = () => { localStorage.removeItem(LS_SESSION); localStorage.removeItem(LS_SESION_ACTIVA); };
+  function hasRealSession() {
+    const active = sesionActiva();
+    // A real login always writes both keys. Older demos wrote only LS_SESSION.
+    return localStorage.getItem(LS_SESSION) === 'ok' &&
+      typeof active?.familia === 'string' && !!active.familia &&
+      typeof active?.email === 'string' && !!active.email;
+  }
+  const hasSession = () => modoDemo || hasRealSession();
+  function logout() {
+    if (modoDemo) return;
+    clearTimeout(syncTimer);
+    localStorage.removeItem(LS_SESSION);
+    localStorage.removeItem(LS_SESION_ACTIVA);
+  }
 
   /* ---------- familias y cuentas locales (creadas en el dispositivo) ----------
      La familia original ('maya') usa las cuentas integradas de arriba con su
@@ -152,6 +164,7 @@ const Store = (() => {
   }
 
   async function crearCuenta({ email, pass, quien, familia, nombreBebe }) {
+    if (modoDemo) return { error: 'Sal del demo para crear una cuenta' };
     email = (email || '').trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Correo no válido' };
     if ((pass || '').length < 8) return { error: 'La contraseña necesita al menos 8 caracteres' };
@@ -183,6 +196,7 @@ const Store = (() => {
   }
 
   function iniciarSesionFamilia(familia, quien, email) {
+    if (modoDemo) return;
     localStorage.setItem(LS_SESION_ACTIVA, JSON.stringify({ familia, quien: quien || '', email: email || '' }));
     localStorage.setItem(LS_SESSION, 'ok');
     if (quien) setDispositivo(quien);
@@ -201,7 +215,7 @@ const Store = (() => {
   const LS_BEBE_ACTIVO = 'maya.bebe-activo.v1';
   const MAX_BEBES = 5;
 
-  let modoDemo = false;
+  let modoDemo = false, dispositivoDemo = '';
   let bebeActivo = localStorage.getItem(LS_BEBE_ACTIVO) || 'maya';
 
   // el demo se reinicia solo: si alguien lo llena de datos, a la media hora
@@ -212,7 +226,6 @@ const Store = (() => {
   function activarDemo(seed) {
     modoDemo = true;
     bebeActivo = 'demo';                     // claves propias: jamás toca datos reales
-    localStorage.setItem(LS_SESSION, 'ok');  // el demo entra directo
     let reseed = !localStorage.getItem(kData('demo'));
     try {
       const meta = JSON.parse(localStorage.getItem('maya.demo-meta.v1') || 'null');
@@ -301,7 +314,7 @@ const Store = (() => {
   // no cabe, suelta todos los dataUrl. Nunca lanza: devuelve true/false.
   function persistir(id, d) {
     const sinSync = f => f.sincronizada && f.dataUrl ? { ...f, dataUrl: undefined } : f;
-    const sinNada = f => f.dataUrl ? { ...f, dataUrl: undefined } : f;
+    const sinNada = f => ({ ...f, dataUrl: undefined, miniaturaPendiente: undefined });
     for (const trim of [sinSync, sinNada]) {
       try {
         const copia = { ...d, fotos: (d.fotos || []).map(trim) };
@@ -353,6 +366,11 @@ const Store = (() => {
   }
 
   function remove(col, id) {
+    const removed = col === 'fotos' ? data.fotos.find(f => f.id === id) : null;
+    if (removed && !modoDemo) {
+      MayaPhotoThumbs.discard(photoCacheScope(), photoKey(removed)).catch(() => {});
+      if (removed.miniatura && removed.archivo && canSync()) queueThumbRemoval(removed.archivo);
+    }
     data[col] = data[col].filter(x => x.id !== id);
     data.borrados.push({ col, id, at: now() });
     saveLocal();
@@ -374,8 +392,11 @@ const Store = (() => {
   /* identidad del dispositivo: a quién pertenece este teléfono.
      Se guarda localmente en cada equipo, una sola vez. */
   const LS_DISPOSITIVO = 'maya.dispositivo.v1';
-  const getDispositivo = () => localStorage.getItem(LS_DISPOSITIVO) || '';
-  const setDispositivo = v => localStorage.setItem(LS_DISPOSITIVO, v);
+  const getDispositivo = () => modoDemo ? dispositivoDemo : localStorage.getItem(LS_DISPOSITIVO) || '';
+  function setDispositivo(v) {
+    if (modoDemo) dispositivoDemo = v;
+    else localStorage.setItem(LS_DISPOSITIVO, v);
+  }
 
   /* foto de perfil: vive en el repo privado; se cachea por dispositivo */
   const LS_AVATAR = 'maya.avatar.v1';
@@ -430,8 +451,14 @@ const Store = (() => {
     }
     // conservar el dataUrl de las fotos ya descargadas: el remoto no lo trae
     // (se guarda aparte) y sin esto la galería tendría que volver a bajarlas
-    const dataUrlPorId = new Map((data.fotos || []).filter(f => f.dataUrl).map(f => [f.id, f.dataUrl]));
-    merged.fotos.forEach(f => { if (!f.dataUrl && dataUrlPorId.has(f.id)) f.dataUrl = dataUrlPorId.get(f.id); });
+    const localPhotos = new Map((data.fotos || []).map(f => [f.id, f]));
+    merged.fotos.forEach(f => {
+      const local = localPhotos.get(f.id);
+      if (!local || local.archivo !== f.archivo) return;
+      if (!f.dataUrl && local.dataUrl) f.dataUrl = local.dataUrl;
+      if (local.miniaturaPendiente) f.miniaturaPendiente = local.miniaturaPendiente;
+      if (local.miniaturaSubida) f.miniaturaSubida = true;
+    });
     return merged;
   }
 
@@ -476,45 +503,156 @@ const Store = (() => {
     return res.json();
   }
 
-  const canSync = () => !modoDemo && !!(config.token && config.owner && config.repo);
+  const canSync = () => !modoDemo && hasRealSession() && !!(config.token && config.owner && config.repo);
 
   function setSyncState(s) {
     syncState = s;
     notify();
   }
 
-  async function syncPhotos() {
+  // A sidecar exists only for new user uploads. A legacy read never writes or
+  // mutates the record; clients without the sidecar field continue opening JPEGs.
+  const validPhotoFile = filename => typeof filename === 'string' && /^[a-z0-9._-]+\.jpe?g$/i.test(filename) && !filename.startsWith('.');
+  const thumbPath = filename => `fotos/miniaturas/${encodeURIComponent(filename)}`;
+  const photoPath = filename => `fotos/${encodeURIComponent(filename)}`;
+  function photoCacheScope() {
+    return JSON.stringify(modoDemo
+      ? ['demo']
+      : [familiaActiva(), sesionActiva()?.email || getDispositivo(), bebeActivo, config.owner, config.repo, config.branch]);
+  }
+  const photoKey = f => JSON.stringify([f.id, f.archivo || '', f.fecha || '']);
+  const thumbRemovalKey = () => 'maya.thumb-removal.v1.' + photoCacheScope();
+  function queueThumbRemoval(filename) {
+    if (!validPhotoFile(filename)) return;
+    try {
+      const key = thumbRemovalKey();
+      const pending = new Set(JSON.parse(localStorage.getItem(key) || '[]'));
+      pending.add(filename);
+      localStorage.setItem(key, JSON.stringify([...pending].slice(-100)));
+    } catch { /* The existing local deletion still succeeds. */ }
+  }
+  async function syncPhotoRemovals(scope) {
+    const key = thumbRemovalKey();
+    let pending;
+    try { pending = JSON.parse(localStorage.getItem(key) || '[]'); } catch { return; }
+    for (const filename of pending) {
+      if (scope !== photoCacheScope() || !canSync()) return;
+      if (!validPhotoFile(filename)) continue;
+      try {
+        const path = thumbPath(filename);
+        const remote = await ghGetFile(path);
+        if (scope !== photoCacheScope() || !canSync()) return;
+        if (remote?.sha) {
+          const r = await fetch(`${apiBase()}/${path}`, {
+            method: 'DELETE', headers: headers(),
+            body: JSON.stringify({ sha: remote.sha, branch: config.branch, message: 'Eliminar miniatura de foto' }),
+          });
+          if (!r.ok && r.status !== 404) continue;
+        }
+        const fresh = JSON.parse(localStorage.getItem(key) || '[]').filter(f => f !== filename);
+        localStorage.setItem(key, JSON.stringify(fresh));
+      } catch { /* leave queued for the next sync */ }
+    }
+  }
+  async function syncPhotos(scope) {
     for (const foto of data.fotos) {
+      if (scope !== photoCacheScope() || !canSync()) return;
+      if (!validPhotoFile(foto.archivo) || !data.fotos.includes(foto)) continue;
       if (!foto.sincronizada && foto.dataUrl) {
         const b64 = foto.dataUrl.split(',')[1];
         try {
-          await ghPutFile(`fotos/${foto.archivo}`, b64, null, `Foto: ${foto.titulo || foto.archivo}`);
-          foto.sincronizada = true;
-          foto.updatedAt = now();
+          await ghPutFile(photoPath(foto.archivo), b64, null, `Foto: ${foto.titulo || foto.archivo}`);
         } catch (e) {
-          if (String(e.message).includes('422')) { foto.sincronizada = true; } // ya existe
-          else throw e;
+          if (!String(e.message).includes('422')) continue;
+          // A GitHub 422 does not always imply a duplicate.
+          try { if (!await ghGetFile(photoPath(foto.archivo))) continue; } catch { continue; }
+        }
+        if (scope !== photoCacheScope() || !canSync()) return;
+        if (!data.fotos.includes(foto)) continue;
+        foto.sincronizada = true;
+        foto.updatedAt = now();
+      }
+      if (foto.sincronizada && foto.miniatura && (foto.miniaturaPendiente || (foto.dataUrl && !foto.miniaturaSubida))) {
+        let src = foto.miniaturaPendiente || await MayaPhotoThumbs.resize(foto.dataUrl);
+        if (scope !== photoCacheScope() || !canSync()) return;
+        if (!src || !data.fotos.includes(foto)) continue;
+        try {
+          const path = thumbPath(foto.archivo);
+          try {
+            await ghPutFile(path, src.split(',')[1], null, 'Miniatura de foto');
+          } catch (e) {
+            if (!String(e.message).includes('422')) throw e;
+            const existing = await ghGetFile(path);
+            if (!existing?.content) throw e;
+          }
+          foto.miniaturaSubida = true;
+          delete foto.miniaturaPendiente;
+        } catch {
+          foto.miniaturaPendiente = src; // retry on the next normal/manual sync
         }
       }
     }
+    await syncPhotoRemovals(scope);
   }
 
-  async function fetchPhoto(foto) {
+  const originalPending = new Map();
+  async function fetchPhoto(foto, { retain = true } = {}) {
     if (foto.dataUrl) return foto.dataUrl;
+    if (!canSync() || !validPhotoFile(foto.archivo)) return null;
+    const scope = photoCacheScope(), key = JSON.stringify([scope, photoKey(foto)]);
+    const path = photoPath(foto.archivo);
+    if (!originalPending.has(key)) {
+      originalPending.set(key, ghPhotoSource(path).finally(() => originalPending.delete(key)));
+    }
+    const src = await originalPending.get(key);
+    if (!src || scope !== photoCacheScope() || !canSync()) return null;
+    if (retain) foto.dataUrl = src;
+    return src;
+  }
+  async function ghPhotoSource(path) {
+    // Capture credentials and target together before awaiting. A late response
+    // must not make a subsequent raw request against a new family's backend.
+    const url = `${apiBase()}/${path}?ref=${encodeURIComponent(config.branch)}`;
+    const auth = headers();
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 12000);
     try {
-      const f = await ghGetFile(`fotos/${foto.archivo}`);
-      if (!f) return null;
-      let b64 = f.content;
-      if (!b64 && f.download_url) {
-        // archivos >1MB: la API no regresa contenido inline
-        const r = await fetch(f.download_url);
-        const blob = await r.blob();
-        b64 = await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
-      }
-      foto.dataUrl = `data:image/jpeg;base64,${b64.replace(/\n/g, '')}`;
-      persistir(bebeActivo, data);
-      return foto.dataUrl;
-    } catch (e) { console.error('Foto no disponible', e); return null; }
+      const meta = await fetch(url, { headers: auth, cache: 'no-store', signal: abort.signal });
+      if (!meta.ok) return null;
+      const f = await meta.json();
+      if (f.content) return `data:image/jpeg;base64,${f.content.replace(/\n/g, '')}`;
+      const r = await fetch(url, {
+        headers: { ...auth, Accept: 'application/vnd.github.raw+json' }, cache: 'no-store', signal: abort.signal,
+      });
+      if (!r.ok) return null;
+      const blob = await r.blob();
+      return new Promise(resolve => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(`data:image/jpeg;base64,${String(fr.result).split(',')[1]}`);
+        fr.onerror = () => resolve(null);
+        fr.readAsDataURL(blob);
+      });
+    } catch { return null; }
+    finally { clearTimeout(timeout); }
+  }
+  async function fetchThumb(foto) {
+    const scope = photoCacheScope();
+    const demo = modoDemo;
+    return MayaPhotoThumbs.get({
+      scope, file: photoKey(foto), persist: !demo,
+      stillCurrent: () => scope === photoCacheScope() && (demo || hasSession()),
+      load: async () => {
+        if (MayaPhotoThumbs.valid(foto.miniaturaPendiente)) return foto.miniaturaPendiente;
+        if (foto.miniatura && canSync() && validPhotoFile(foto.archivo)) {
+          const src = await ghPhotoSource(thumbPath(foto.archivo));
+          if (MayaPhotoThumbs.valid(src)) return src;
+        }
+        if (scope !== photoCacheScope() || (!demo && !hasSession())) return null;
+        // Legacy preview: generate it during the first read, then use the
+        // phone's compact cache. Never backfill old records remotely.
+        return MayaPhotoThumbs.resize(foto.dataUrl || await fetchPhoto(foto, { retain: false }));
+      },
+    });
   }
 
   let syncing = false;
@@ -522,9 +660,11 @@ const Store = (() => {
     if (!canSync() || syncing) return;
     syncing = true;
     setSyncState('busy');
-    const idSync = bebeActivo; // por si cambian de bebé a media sincronización
+    const idSync = bebeActivo;
+    const scope = photoCacheScope(); // por si cambian de bebé a media sincronización
     try {
       const remoteFile = await ghGetFile(archivoDatos(idSync));
+      if (scope !== photoCacheScope() || !canSync()) return;
       let sha = null;
       if (remoteFile) {
         sha = remoteFile.sha;
@@ -537,18 +677,21 @@ const Store = (() => {
           if (!r.ok) throw new Error(`GitHub raw ${r.status}`);
           texto = await r.text();
         }
+        if (scope !== photoCacheScope() || !canSync()) return;
         if (texto) data = mergeData(JSON.parse(texto));
       }
       // primero los registros: una foto atorada nunca debe bloquearlos
       const slim = JSON.parse(JSON.stringify(data));
-      slim.fotos = slim.fotos.map(f => { const c = { ...f }; delete c.dataUrl; return c; });
+      slim.fotos = slim.fotos.map(f => { const c = { ...f }; delete c.dataUrl; delete c.miniaturaPendiente; delete c.miniaturaSubida; return c; });
       await ghPutFile(archivoDatos(idSync), b64encodeUtf8(JSON.stringify(slim, null, 1)), sha, `Registro ${new Date().toLocaleString('es-MX')}`);
+      if (scope !== photoCacheScope() || !canSync()) return;
       config.lastSync = now();
       saveConfig();
       persistir(idSync, data);
       setSyncState('ok');
       try {
-        await syncPhotos();
+        await syncPhotos(scope);
+        if (scope !== photoCacheScope() || !canSync()) return;
         persistir(idSync, data);
       } catch (e) {
         console.error('Fotos pendientes de subir', e);
@@ -556,6 +699,7 @@ const Store = (() => {
       // perfiles de bebés compartidos entre los dos teléfonos
       try {
         const pf = await ghGetFile('datos/perfiles.json');
+        if (scope !== photoCacheScope() || !canSync()) return;
         const remotos = pf && pf.content ? JSON.parse(b64decodeUtf8(pf.content)) : [];
         const porId = new Map();
         [...remotos, ...getBebes()].forEach(p => {
@@ -572,9 +716,10 @@ const Store = (() => {
       } catch (e) { console.error('Perfiles no sincronizados', e); }
     } catch (e) {
       console.error('Error de sincronización', e);
-      setSyncState('error');
+      if (scope === photoCacheScope()) setSyncState('error');
     } finally {
       syncing = false;
+      if (scope !== photoCacheScope()) scheduleSync();
     }
   }
 
@@ -590,7 +735,7 @@ const Store = (() => {
   }
 
   return {
-    login, hasSession, logout,
+    login, hasSession, hasRealSession, logout,
     loadLocal, saveLocal, saveConfig,
     add, update, remove, onChange,
     marcarActividad, fetchAvatar, getAvatarCache,
@@ -601,7 +746,7 @@ const Store = (() => {
     get modoDemo() { return modoDemo; },
     get bebeActivo() { return bebeActivo; },
     getTimers, setTimers,
-    syncNow, scheduleSync, testConnection, canSync, fetchPhoto,
+    syncNow, scheduleSync, testConnection, canSync, fetchPhoto, fetchThumb, photoCacheScope,
     get data() { return data; },
     set data(d) { data = d; },
     get config() { return config; },

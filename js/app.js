@@ -2701,11 +2701,13 @@
   }
 
   /* ---------- Fotos ---------- */
-  let galeriaTimer = null;
+  let galleryView = null;
   function renderFotos() {
-    clearInterval(galeriaTimer); galeriaTimer = null;
-    // las fotos de pañal viven en su registro, no en la galería de recuerdos
+    // Las fotos de pañal viven en su propio registro.
     const fotos = Store.data.fotos.filter(f => f.categoria !== 'panal').sort((a, b) => b.fecha.localeCompare(a.fecha));
+    const scope = Store.photoCacheScope();
+    const key = JSON.stringify([scope, I18N.lang, fotos.map(f => [f.id, f.archivo, f.fecha, f.titulo, !!f.miniatura])]);
+    if (galleryView?.key === key && galleryView.grid.isConnected) return;
     main.innerHTML = `
       ${volverMas}
       <h2 class="section-title">Fotos 📸</h2>
@@ -2716,46 +2718,102 @@
         <button class="btn-secondary" style="flex:1" id="btn-galeria">🖼️ Subir foto</button>
       </div>
       <div class="photo-grid" style="margin-top:14px" id="grid-fotos">
-        ${fotos.map(f => `<img class="foto-cargando" data-foto="${f.id}" alt="${esc(f.titulo || (I18N.lang === 'en' ? 'Baby photo' : 'Foto del bebé'))}" decoding="async">`).join('') ||
+        ${fotos.map((f, i) => `<button type="button" class="photo-tile foto-cargando" data-i="${i}" aria-label="${esc(f.titulo || remText('Foto del bebé', 'Baby photo'))}">
+          <img alt="" decoding="async" hidden><span class="foto-error" hidden aria-hidden="true">↻</span>
+        </button>`).join('') ||
           `<div class="empty-state" style="grid-column:1/-1"><span class="big">📸</span>${I18N.t('Guarda fotos de momentos especiales o de cosas que quieras enseñarle al pediatra')}</div>`}
       </div>
+      <div id="fotos-estado" class="fotos-estado" role="status"></div>
+      <button id="fotos-reintentar" class="btn-ghost btn-block hidden">${remText('Reintentar las que faltan', 'Retry missing previews')}</button>
     `;
     bindVolver();
     $('#btn-camara').onclick = () => $('#foto-input').click();
     $('#btn-galeria').onclick = () => $('#foto-galeria').click();
     $('#foto-input').onchange = e => procesarFoto(e.target.files[0]);
     $('#foto-galeria').onchange = e => procesarFoto(e.target.files[0]);
-    // clic en cualquier miniatura → abre el visor (delegación: sobrevive re-render)
-    const grid = $('#grid-fotos');
-    if (grid) grid.onclick = e => { const im = e.target.closest('[data-foto]'); if (!im) return; const f = fotos.find(x => x.id === im.dataset.foto); if (f) verFoto(f); };
-
-    // carga una miniatura: obtiene el dataUrl (caché o GitHub) y REEMPLAZA el
-    // <img> por uno nuevo. Reasignar src sobre el mismo elemento a veces no
-    // repinta en iOS; recrear el nodo fuerza el pintado, como al re-navegar.
-    const cargarFoto = async (f) => {
-      const src = f.dataUrl || await Store.fetchPhoto(f);
-      if (!src) return false;
-      const img = main.querySelector(`[data-foto="${f.id}"]`);
-      if (!img) return false;
-      if (img.src === src && img.complete && img.naturalWidth > 0) return true; // ya está
-      const fresh = img.cloneNode(false);
-      fresh.classList.remove('foto-cargando');
-      fresh.src = src;
-      img.replaceWith(fresh);
-      return true;
+    const grid = $('#grid-fotos'), status = $('#fotos-estado'), retry = $('#fotos-reintentar');
+    const view = { key, grid, busy: false };
+    galleryView = view;
+    const tiles = [...grid.querySelectorAll('.photo-tile')];
+    const current = () => galleryView === view && grid.isConnected && scope === Store.photoCacheScope();
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const missing = () => tiles.filter(t => !t.classList.contains('foto-lista'));
+    const setStatus = () => {
+      const n = missing().length;
+      status.textContent = n
+        ? (view.busy ? remText(`Cargando ${n} miniaturas…`, `Loading ${n} previews…`)
+          : remText(`${n} miniaturas no disponibles.`, `${n} previews unavailable.`))
+        : '';
+      retry.classList.toggle('hidden', view.busy || !n);
     };
-    fotos.forEach(cargarFoto);
-
-    // red de seguridad: cada 3 s reintenta las que sigan sin imagen, hasta que
-    // todas carguen (o se salga del carrete, o tras varios intentos)
-    let intentos = 0;
-    galeriaTimer = setInterval(() => {
-      const g = $('#grid-fotos');
-      if (!g) { clearInterval(galeriaTimer); galeriaTimer = null; return; }
-      const faltan = [...g.querySelectorAll('img')].filter(im => !im.complete || im.naturalWidth === 0);
-      if (!faltan.length || ++intentos > 12) { clearInterval(galeriaTimer); galeriaTimer = null; return; }
-      faltan.forEach(im => { const f = fotos.find(x => x.id === im.dataset.foto); if (f) cargarFoto(f); });
-    }, 3000);
+    function decodePreview(img, src) {
+      return new Promise(resolve => {
+        let timeout;
+        const finish = ok => {
+          img.removeEventListener('load', loaded);
+          img.removeEventListener('error', failed);
+          clearTimeout(timeout);
+          resolve(ok);
+        };
+        const loaded = () => finish(img.naturalWidth > 0);
+        const failed = () => finish(false);
+        img.addEventListener('load', loaded);
+        img.addEventListener('error', failed);
+        timeout = setTimeout(failed, 6000);
+        img.src = src;
+        if (img.complete && img.naturalWidth > 0) loaded();
+      });
+    }
+    async function loadTile(tile) {
+      const f = fotos[+tile.dataset.i], img = tile.querySelector('img');
+      if (!current()) return;
+      tile.classList.add('foto-cargando');
+      tile.querySelector('.foto-error').hidden = true;
+      const src = await Store.fetchThumb(f);
+      if (!current()) return;
+      const loaded = src && await decodePreview(img, src);
+      if (!current()) return;
+      tile.classList.remove('foto-cargando');
+      tile.classList.toggle('foto-lista', !!loaded);
+      tile.querySelector('.foto-error').hidden = !!loaded;
+      img.hidden = !loaded;
+      if (!loaded && src) {
+        img.removeAttribute('src');
+        await MayaPhotoThumbs.discard(scope, JSON.stringify([f.id, f.archivo || '', f.fecha || ''])).catch(() => {});
+      }
+      setStatus();
+    }
+    async function runPreviews() {
+      if (!current() || view.busy || !missing().length) return;
+      view.busy = true;
+      setStatus();
+      try {
+        for (const delay of [0, 800, 2000]) {
+          if (delay) await wait(delay);
+          if (!current()) return;
+          const queue = missing();
+          if (!queue.length) break;
+          // Newest/visible tiles are first. Keep only three requests in flight
+          // and on each pass retry only those which failed to decode.
+          await Promise.all(Array.from({ length: Math.min(3, queue.length) }, async () => {
+            while (current() && queue.length) await loadTile(queue.shift());
+          }));
+        }
+      } finally {
+        view.busy = false;
+        if (current()) setStatus();
+      }
+    }
+    grid.onclick = e => {
+      const tile = e.target.closest('.photo-tile');
+      if (!tile || !current()) return;
+      const f = fotos[+tile.dataset.i];
+      const img = tile.querySelector('img');
+      verFoto(f, tile.classList.contains('foto-lista') ? img.src : '');
+    };
+    retry.onclick = runPreviews;
+    view.retry = runPreviews;
+    runPreviews();
   }
 
   // lee y reduce una foto a un dataURL listo para guardar/sincronizar
@@ -2783,14 +2841,19 @@
 
   async function procesarFoto(file, semana) {
     if (!file) return;
+    const scope = Store.photoCacheScope();
     const dataUrl = await leerFoto(file).catch(() => null);
+    if (scope !== Store.photoCacheScope()) return;
     if (!dataUrl) { toast('No se pudo leer la foto'); return; }
     const titulo = semana != null ? `${I18N.lang === 'en' ? 'Week' : 'Semana'} ${semana} 💗` : (prompt(I18N.lang === 'en' ? 'Photo title (optional):' : 'Título de la foto (opcional):') || '');
+    const miniaturaPendiente = await MayaPhotoThumbs.resize(dataUrl);
+    if (scope !== Store.photoCacheScope()) return;
     const id = Store.uid();
     Store.add('fotos', {
       id, fecha: new Date().toISOString(), titulo,
       archivo: `${new Date().toISOString().slice(0, 10)}-${id}.jpg`,
       dataUrl, sincronizada: false,
+      ...(miniaturaPendiente ? { miniatura: true, miniaturaPendiente } : {}),
       ...(semana != null ? { semana } : {}),
     });
     if (semana != null) {
@@ -2866,26 +2929,64 @@
     $('#fs-carrete').onclick = () => lanzar(false);
   }
 
-  function verFoto(f) {
+  let photoViewer = null;
+  function verFoto(f, preview = '') {
+    photoViewer?.el.remove();
+    const scope = Store.photoCacheScope();
     const div = document.createElement('div');
+    photoViewer = { el: div, scope };
     div.className = 'photo-viewer';
+    div.setAttribute('role', 'dialog');
+    div.setAttribute('aria-modal', 'true');
+    div.setAttribute('aria-label', remText('Foto', 'Photo'));
     div.innerHTML = `
-      <img src="${f.dataUrl || ''}">
+      <img alt="${esc(f.titulo || remText('Foto del bebé', 'Baby photo'))}" hidden>
       <div class="pv-caption">${esc(f.titulo || '')}<br><small>${new Date(f.fecha).toLocaleString(I18N.loc())}</small></div>
+      <div class="pv-caption" id="pv-status" role="status"></div>
       <div class="pv-actions">
-        <button class="btn-danger" id="pv-del">${I18N.lang === 'en' ? 'Delete' : 'Borrar'}</button>
-        <button class="btn-secondary" id="pv-close">${I18N.lang === 'en' ? 'Close' : 'Cerrar'}</button>
+        <button class="btn-danger" id="pv-del">${remText('Borrar', 'Delete')}</button>
+        <button class="btn-secondary" id="pv-close">${remText('Cerrar', 'Close')}</button>
       </div>
+      <button class="btn-secondary hidden" id="pv-retry" style="margin-top:10px">${remText('Reintentar', 'Retry')}</button>
     `;
     document.body.appendChild(div);
-    div.querySelector('#pv-close').onclick = () => div.remove();
+    const img = div.querySelector('img'), status = div.querySelector('#pv-status'), retry = div.querySelector('#pv-retry');
+    if (preview) { img.src = preview; img.hidden = false; }
+    const current = () => div.isConnected && Store.photoCacheScope() === scope;
+    const close = () => { div.remove(); if (photoViewer?.el === div) photoViewer = null; };
+    div.querySelector('#pv-close').onclick = close;
+    div.querySelector('#pv-close').focus();
+    div.onkeydown = e => { if (e.key === 'Escape') close(); };
     div.querySelector('#pv-del').onclick = () => {
-      if (confirm(I18N.lang === 'en' ? 'Delete this photo from the record?' : '¿Borrar esta foto del registro?')) {
+      if (current() && confirm(remText('¿Borrar esta foto del registro?', 'Delete this photo from the record?'))) {
         Store.remove('fotos', f.id);
-        div.remove();
-        toast(I18N.lang === 'en' ? 'Photo deleted' : 'Foto borrada');
+        close();
+        toast(remText('Foto borrada', 'Photo deleted'));
       }
     };
+    const load = async () => {
+      status.textContent = remText('Cargando foto completa…', 'Loading full photo…');
+      retry.classList.add('hidden');
+      function failed() {
+        if (!current()) return;
+        status.textContent = remText('No se pudo cargar la foto completa.', 'Could not load the full photo.');
+        retry.classList.remove('hidden');
+      }
+      const src = await Store.fetchPhoto(f, { retain: false });
+      if (!current()) return;
+      if (!src) { failed(); return; }
+      const full = new Image();
+      full.onload = () => {
+        if (!current()) return;
+        img.src = src;
+        img.hidden = false;
+        status.textContent = '';
+      };
+      full.onerror = failed;
+      full.src = src;
+    };
+    retry.onclick = load;
+    load();
   }
 
   /* ---------- Resumen PDF ---------- */
@@ -2951,6 +3052,136 @@
     };
   }
 
+  /* ---------- Recordatorios privados, por bebé y dispositivo ---------- */
+  const remText = (es, en) => I18N.lang === 'en' ? en : es;
+  const remKey = name => 'maya.reminders.v1.' + name + '.' + Store.photoCacheScope();
+  const remDemo = {};
+  function remRead(name, fallback) {
+    try {
+      if (Store.modoDemo) return remDemo[name] ?? fallback;
+      return JSON.parse(localStorage.getItem(remKey(name)) || 'null') ?? fallback;
+    } catch { return fallback; }
+  }
+  function remWrite(name, value) {
+    if (Store.modoDemo) { remDemo[name] = value; return; }
+    try { localStorage.setItem(remKey(name), JSON.stringify(value)); } catch { /* private browsing */ }
+  }
+  const remPrefs = () => MayaReminders.settings(remRead('prefs', {}));
+  function reminderCopy(a) {
+    const name = Store.data.bebe.nombre || remText('tu bebé', 'your baby');
+    const elapsed = a.elapsed == null ? '' : fmtDurLarga(a.elapsed);
+    const week = semanaActual();
+    if (a.type === 'feed') return remText(
+      `Hace ${elapsed} que no registras una toma de ${name}.`, `It’s been ${elapsed} since ${name}’s last logged feed.`);
+    if (a.type === 'poop') return remText(
+      `Hace ${elapsed} que no registras popó de ${name}.`, `It’s been ${elapsed} since ${name}’s last logged dirty diaper.`);
+    if (a.type === 'wet') return remText(
+      `Hace ${elapsed} que no registras pipí de ${name}.`, `It’s been ${elapsed} since ${name}’s last logged wet diaper.`);
+    if (a.type === 'sleep') return remText(
+      `${name} lleva ${elapsed} despierta según el registro. Revisa su ventana de sueño.`, `${name} has been awake for ${elapsed} based on your logs. Check the wake window.`);
+    return remText(
+      `Falta la foto de ${name} de la semana ${week}.`, `${name}’s week ${week} photo is still missing.`);
+  }
+  let remLast = '';
+  function remCard() {
+    const p = remPrefs();
+    const check = (k, label) => `<label class="checkbox-row"><input type="checkbox" name="${k}" ${p[k] ? 'checked' : ''}> ${label}</label>`;
+    const n = (k, label, min, max, step) => `<label class="rem-number">${label}
+      <input aria-label="${label}" name="${k}" type="number" min="${min}" max="${max}" step="${step}" value="${p[k]}"></label>`;
+    return `<form class="card reminders-card" id="rem-settings">
+      <h2>🔔 ${remText('Recordatorios', 'Reminders')}</h2>
+      <p>${remText('En este dispositivo y para este perfil. Los avisos dependen de lo registrado y se revisan con la app abierta; no son alertas médicas.', 'For this profile and device. Reminders reflect your logs and are checked with the app open; they are not medical alerts.')}</p>
+      ${check('sleep', remText('Ventana de sueño', 'Wake window'))}
+      ${n('sleepMinutes', remText('Minutos despierta (0 = guía de la app)', 'Minutes awake (0 = app guide)'), 0, 720, 1)}
+      ${check('feed', remText('Tiempo sin registrar toma', 'Time since last logged feed'))}
+      ${n('feedHours', remText('Horas desde la toma', 'Hours since feed'), .5, 48, .5)}
+      ${check('poop', remText('Tiempo sin registrar popó', 'Time since last logged dirty diaper'))}
+      ${n('poopHours', remText('Horas desde el último pañal con popó', 'Hours since dirty diaper'), 1, 168, 1)}
+      ${check('wet', remText('Tiempo sin registrar pipí', 'Time since last logged wet diaper'))}
+      ${n('wetHours', remText('Horas desde el último pañal con pipí', 'Hours since wet diaper'), 1, 48, 1)}
+      ${check('photo', remText('Foto semanal pendiente', 'Missing weekly photo'))}
+      ${check('quiet', remText('Activar horario de silencio', 'Enable quiet hours'))}
+      <div class="form-row">
+        <label class="form-group">${remText('Desde', 'From')}<input required type="time" name="from" value="${p.from}"></label>
+        <label class="form-group">${remText('Hasta', 'Until')}<input required type="time" name="to" value="${p.to}"></label>
+      </div>
+      <p>${remText('Se usa la hora local; si ambas horas son iguales, no se envían avisos en todo el día.', 'Uses local time; matching times silence reminders all day.')}</p>
+      ${!Store.modoDemo && 'Notification' in window && 'serviceWorker' in navigator ? check('system', remText('Mostrar estos detalles en avisos del sistema (con la app abierta; pueden verse en la pantalla bloqueada)', 'Show details in system notifications (while open; may appear on the lock screen)')) : ''}
+      <button class="btn-primary btn-block" type="submit">${remText('Guardar recordatorios', 'Save reminders')}</button>
+    </form>`;
+  }
+  function bindReminders() {
+    const form = $('#rem-settings');
+    if (!form) return;
+    form.onsubmit = async e => {
+      e.preventDefault();
+      const p = {};
+      for (const k of ['sleep', 'feed', 'poop', 'wet', 'photo', 'quiet', 'system']) p[k] = !!form.elements.namedItem(k)?.checked;
+      for (const k of ['sleepMinutes', 'feedHours', 'poopHours', 'wetHours', 'from', 'to']) p[k] = form.elements.namedItem(k).value;
+      const scope = Store.photoCacheScope();
+      if (p.system) {
+        let permitted = false;
+        try { permitted = await Notification.requestPermission() === 'granted'; } catch { /* browser unsupported */ }
+        p.system = permitted;
+        if (!permitted) form.elements.namedItem('system').checked = false;
+      }
+      if (scope !== Store.photoCacheScope()) return;
+      remWrite('prefs', MayaReminders.settings(p));
+      checkReminders();
+      toast(remText('Recordatorios guardados', 'Reminders saved'));
+    };
+  }
+  function checkReminders() {
+    const box = $('#care-reminders');
+    if (!box || document.visibilityState !== 'visible' || !Store.hasSession()) return;
+    const prefs = remPrefs(), scope = Store.photoCacheScope();
+    const pending = MayaReminders.due({
+      data: Store.data, timers: Store.getTimers(), prefs,
+      sleepMin: ventanaEdad()?.min, week: semanaActual(),
+    });
+    const dismissed = remRead('dismissed', {});
+    const visible = pending.filter(a => !dismissed[a.id]);
+    // Keep existing nodes while only the elapsed minute count changes.
+    const stableKey = JSON.stringify([scope, I18N.lang, visible.map(n => n.id)]);
+    if (remLast !== stableKey) {
+      remLast = stableKey;
+      box.classList.toggle('hidden', !visible.length);
+      box.innerHTML = visible.map(a => `<div class="care-reminder">
+        <span>🔔 <span data-rem-copy="${a.type}"></span></span>
+        ${a.type === 'photo' ? `<button class="btn-ghost" data-accion="foto-semanal" data-sem="${semanaActual()}">${remText('Tomar foto', 'Take photo')}</button>` : ''}
+        <button class="btn-ghost" data-rem-dismiss="${a.type}" aria-label="${remText('Ocultar recordatorio', 'Dismiss reminder')}">✕</button>
+      </div>`).join('');
+      box.querySelectorAll('[data-rem-dismiss]').forEach(btn => {
+        btn.onclick = () => {
+          const a = visible.find(n => n.type === btn.dataset.remDismiss);
+          if (!a || scope !== Store.photoCacheScope()) return;
+          remWrite('dismissed', Object.fromEntries([...Object.entries(remRead('dismissed', {})), [a.id, true]].slice(-60)));
+          checkReminders();
+        };
+      });
+    }
+    for (const a of visible) {
+      const txt = reminderCopy(a);
+      const el = box.querySelector(`[data-rem-copy="${a.type}"]`);
+      if (el?.textContent !== txt && el) el.textContent = txt;
+    }
+    if (prefs.system && !Store.modoDemo && 'Notification' in window && Notification.permission === 'granted') {
+      const notified = remRead('notified', {});
+      const fresh = visible.filter(a => !notified[a.id]);
+      if (fresh.length) {
+        // The user explicitly opted in to detailed system notifications on this device.
+        remWrite('notified', Object.fromEntries([...Object.entries(notified), ...fresh.map(a => [a.id, true])].slice(-60)));
+        if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration().then(reg => {
+          if (scope !== Store.photoCacheScope() || document.visibilityState !== 'visible' || !Store.hasSession()) return;
+          return reg?.showNotification('Maya', {
+            body: fresh.map(reminderCopy).join('\n'),
+            icon: './icons/icon-192.png', tag: 'maya-care-reminder',
+          });
+        }).catch(() => {}); // in-app notice is still visible even if OS rejects it
+      }
+    }
+  }
+
   /* ---------- Ajustes ---------- */
   function renderAjustes() {
     const cfg = Store.config;
@@ -2958,6 +3189,7 @@
     main.innerHTML = `
       ${volverMas}
       <h2 class="section-title">Ajustes ⚙️</h2>
+      ${remCard()}
 
       <div class="card">
         <h2>👶 Bebé</h2>
@@ -3005,7 +3237,7 @@
         ${Store.cuentasDeFamilia().map(c => `
           <div class="measure-row"><span>${c.quien === 'mama' ? '👩' : c.quien === 'papa' ? '👨' : '👤'} ${esc(c.email)}</span>
           <span class="measure-val">${c.quien ? esc(nombreQuien(c.quien)) : ''}</span></div>`).join('') || '<p style="font-size:13px;color:var(--text-2)">Sin cuentas locales</p>'}
-        <button class="btn-secondary btn-block" id="a-agregar-cuenta" style="margin-top:10px">＋ Agregar cuenta de familiar</button>
+        ${Store.modoDemo ? '' : '<button class="btn-secondary btn-block" id="a-agregar-cuenta" style="margin-top:10px">＋ Agregar cuenta de familiar</button>'}
       </div>
 
       ${Store.modoDemo ? `
@@ -3064,6 +3296,7 @@
     bindVolver();
     const on = (sel, fn) => { const el = $(sel); if (el) el.onclick = fn; };
 
+    bindReminders();
     on('#a-guardar-bebe', () => {
       d.bebe.nombre = $('#a-nombre').value.trim() || d.bebe.nombre || (I18N.lang === 'en' ? 'Baby' : 'Bebé');
       d.bebe.nacimiento = $('#a-nac').value;
@@ -3167,8 +3400,11 @@
       };
     });
 
-    $('#a-logout').onclick = () => {
+    $('#a-logout').onclick = async () => {
+      const scope = Store.photoCacheScope();
+      const isDemo = Store.modoDemo;
       Store.logout();
+      if (!isDemo) await Promise.race([MayaPhotoThumbs.discard(scope).catch(() => {}), new Promise(resolve => setTimeout(resolve, 400))]);
       sessionStorage.setItem('maya.ir-login', '1');
       // salir del demo: hay que quitar el ?demo=1 de la URL, si no vuelve a entrar
       if (Store.modoDemo || new URLSearchParams(location.search).has('demo')) {
@@ -3472,6 +3708,10 @@
 
   let vistaAnterior = '';
   function render() {
+    if (photoViewer && photoViewer.scope !== Store.photoCacheScope()) {
+      photoViewer.el.remove();
+      photoViewer = null;
+    }
     const vistaActual = `${tabActual}/${vistaMas || ''}`;
     if (vistaActual !== vistaAnterior) {
       vistaAnterior = vistaActual;
@@ -3491,6 +3731,7 @@
     else renderMas();
     I18N.aplicar(main);
     pintarTabs();
+    checkReminders();
   }
 
   const TABS_LABELS = { inicio: 'Inicio', comida: 'Comida', sueno: 'Sueño', panal: 'Pañal', retos: 'Retos', mas: 'Más' };
@@ -3798,7 +4039,11 @@
     $('#app').classList.remove('hidden');
     Store.loadLocal();
     Store.onChange(render);
+    window.addEventListener('online', () => galleryView?.retry?.());
+    document.addEventListener('visibilitychange', checkReminders);
+    window.addEventListener('focus', checkReminders);
     render();
+    setInterval(checkReminders, 15000);
 
     clearInterval(tickInterval);
     tickInterval = setInterval(() => {
@@ -4101,7 +4346,7 @@
   const paramsURL = new URLSearchParams(location.search);
   const quiereLogin = paramsURL.has('login') || sessionStorage.getItem('maya.ir-login') === '1';
   sessionStorage.removeItem('maya.ir-login');
-  const teniaSesionReal = Store.hasSession();
+  const teniaSesionReal = Store.hasRealSession();
   if (paramsURL.has('demo') || (!teniaSesionReal && !quiereLogin)) {
     const seedDemo = datosDemo();
     // fotos reales libres de derechos para el demo; si el archivo no cargó,
@@ -4121,30 +4366,17 @@
       ? '🧪 DEMO · <u>' + (teniaSesionReal ? 'back to my account' : 'tap to exit') + '</u>'
       : '🧪 DEMO · <u>' + (teniaSesionReal ? 'volver a mi cuenta' : 'toca para salir') + '</u>';
     listaDemo.onclick = () => {
-      if (!teniaSesionReal) {
-        sessionStorage.setItem('maya.ir-login', '1');
-        localStorage.removeItem('maya.session.v1');
-      }
+      if (!teniaSesionReal) sessionStorage.setItem('maya.ir-login', '1');
       location.href = location.pathname;
     };
     document.body.appendChild(listaDemo);
   }
 
-  // enlace de configuración (#setup=...): deja lista la sincronización
-  // con un solo toque, sin teclear el token en el celular
-  try {
-    const m = location.hash.match(/[#&]setup=([^&]+)/);
-    if (m) {
-      const cfg = JSON.parse(atob(decodeURIComponent(m[1])));
-      Store.loadLocal();
-      if (cfg.owner) Store.config.owner = cfg.owner;
-      if (cfg.repo) Store.config.repo = cfg.repo;
-      if (cfg.token) Store.config.token = cfg.token;
-      Store.saveConfig();
-      history.replaceState(null, '', location.pathname + location.search);
-      toast('Sincronización configurada ✅');
-    }
-  } catch (e) { console.error('Enlace de configuración no válido', e); }
+  // Legacy setup links are not a trusted configuration source. Strip any token
+  // from the address bar without parsing it; configuration is manual in Ajustes.
+  if (/(?:^#|&)setup=/.test(location.hash)) {
+    history.replaceState(null, '', location.pathname + location.search);
+  }
 
   if (Store.hasSession()) iniciarApp();
   else { const ls = $('#login-screen'); ls.classList.remove('hidden'); I18N.aplicar(ls); }
