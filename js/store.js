@@ -486,8 +486,8 @@ const Store = (() => {
     return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
   }
 
-  async function ghGetFile(path) {
-    const res = await fetch(`${apiBase()}/${path}?ref=${config.branch}&t=${Date.now()}`, { headers: headers() });
+  async function ghGetFile(path, options = {}) {
+    const res = await fetch(`${apiBase()}/${path}?ref=${config.branch}&t=${Date.now()}`, { headers: headers(), ...options });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`GitHub ${res.status}`);
     return res.json();
@@ -523,6 +523,23 @@ const Store = (() => {
   function pushOwner() {
     if (modoDemo || !hasRealSession()) return '';
     return JSON.stringify([familiaActiva(), sesionActiva()?.email || getDispositivo()]);
+  }
+  const pushEnrollmentEligible = () => !!pushOwner() && familiaActiva() === 'maya';
+  async function pushEnrollmentCode(owner) {
+    const authorized = () => owner && owner === pushOwner() && pushEnrollmentEligible()
+      && canSync() && config.owner === SYNC_EMBED.owner && config.repo === SYNC_EMBED.repo
+      && config.branch === 'main';
+    if (!authorized()) throw new Error('enrollment-unavailable');
+    try {
+      const file = await ghGetFile('config/push-enrollment-v1.json', {
+        cache:'no-store', redirect:'error', signal:AbortSignal.timeout(6000),
+      });
+      if (!authorized() || file?.type !== 'file' || file.encoding !== 'base64'
+        || typeof file.content !== 'string' || file.content.length > 2048) throw new Error();
+      const data = JSON.parse(b64decodeUtf8(file.content));
+      if (data?.version !== 1 || typeof data.code !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(data.code)) throw new Error();
+      return data.code;
+    } catch { throw new Error('enrollment-unavailable'); }
   }
   const photoKey = f => JSON.stringify([f.id, f.archivo || '', f.fecha || '']);
   const thumbRemovalKey = () => 'maya.thumb-removal.v1.' + photoCacheScope();
@@ -750,7 +767,7 @@ const Store = (() => {
     get modoDemo() { return modoDemo; },
     get bebeActivo() { return bebeActivo; },
     getTimers, setTimers,
-    syncNow, scheduleSync, testConnection, canSync, fetchPhoto, fetchThumb, photoCacheScope, pushOwner,
+    syncNow, scheduleSync, testConnection, canSync, fetchPhoto, fetchThumb, photoCacheScope, pushOwner, pushEnrollmentCode, pushEnrollmentEligible,
     get data() { return data; },
     set data(d) { data = d; },
     get config() { return config; },

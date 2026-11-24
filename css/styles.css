@@ -1148,3 +1148,15 @@ details.card[open] summary::after { transform: rotate(90deg); }
 .photo-tile .foto-error { font-size: 24px; }
 .fotos-estado { text-align: center; margin: 8px 0; }
 @media (prefers-reduced-motion: reduce) { .photo-tile.foto-cargando { animation: none; } }
+
+.home-push-button {
+  width: 100%; min-height: 44px; margin: 5px 0 0; padding: 9px 12px;
+  display: flex; align-items: center; gap: 9px; text-align: start;
+  border: 1px solid var(--borde); border-radius: 14px; background: var(--pink-soft);
+  color: var(--text); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer;
+}
+.home-push-button span { flex: 1; min-width: 0; }
+.home-push-button svg { flex: none; }
+.home-push-button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.home-push-button:disabled { opacity: .65; cursor: wait; }
+#home-push-status:not(:empty) { margin: 5px 3px 2px; color: var(--text); font-size: 12px; }

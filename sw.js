@@ -2,7 +2,7 @@
    dispositivo y se sincronizan cuando vuelve la conexión). */
 importScripts('./js/reminders.js', './js/push-storage.js');
 
-const CACHE = 'maya-v20';
+const CACHE = 'maya-v21';
 const ARCHIVOS = [
   './',
   './index.html',

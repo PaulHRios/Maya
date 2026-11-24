@@ -10,7 +10,7 @@ const response=(status,body)=>({status,ok:status>=200&&status<300,json:async()=>
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 test('Opaque schedules, cancellation while request is pending, and at-most-once local display', async()=>{
   const local=new Map(), requests=[], shown=[], listeners={};
-  let state=null, release, handle=Promise.resolve();
+  let state=null, release, handle=Promise.resolve(), gesture=false, subscribed=false;
   const storage={change(fn){
     const task=handle.then(()=>{
       const result=fn(state);
@@ -28,7 +28,7 @@ test('Opaque schedules, cancellation while request is pending, and at-most-once 
     MAYA_PUSH_BASE:'https://scheduler.example.invalid',MayaPushStorage:storage,
     MayaReminders:R,importScripts:()=>{},self,crypto:webcrypto,
     window:{Notification:{},PushManager:{},indexedDB:{}},Notification:{permission:'granted'},
-    navigator:{userAgent:'Chrome',serviceWorker:{ready:Promise.resolve({pushManager:{getSubscription:async()=>sub}})}},
+    navigator:{userAgent:'Chrome',serviceWorker:{ready:Promise.resolve({pushManager:{getSubscription:async()=>null,subscribe:async()=>{ assert.equal(gesture,true); subscribed=true; return sub; }}})}},
     localStorage:{getItem:k=>local.get(k),setItem:(k,v)=>local.set(k,v),removeItem:k=>local.delete(k)},
     fetch:async (url,options)=>{
       assert.equal(new URL(url).host,'scheduler.example.invalid');
@@ -43,7 +43,10 @@ test('Opaque schedules, cancellation while request is pending, and at-most-once 
   vm.runInContext(client+'\nglobalThis.api=MayaPush;',ctx);
   vm.runInContext(sw,ctx);
   await ctx.api.prepare();
-  await ctx.api.turnOn('owner','fixture-enroll');
+  gesture=true;
+  const enabling=ctx.api.turnOn('owner', () => { assert.equal(subscribed,true); return 'fixture-enroll'; });
+  gesture=false;
+  await enabling;
   assert.equal(requests.find(r=>r.url.endsWith('/devices')).options.headers.Authorization,'Bearer fixture-enroll');
   assert.ok(![...local.values()].some(v=>v.includes('fixture-enroll')));
   const now=Date.now(), job={id:'feed:123',type:'feed',since:now-4*3600000,dueAt:now,at:now,expires:now+60000,deadline:now+3600000};

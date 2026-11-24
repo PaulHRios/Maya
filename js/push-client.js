@@ -21,7 +21,7 @@ const MayaPush = (() => {
     if (!configured) throw new Error('scheduler-not-configured');
     const abort=new AbortController(), timeout=setTimeout(()=>abort.abort(),10000);
     try {
-      const r=await fetch(base+'/v1/'+path,{method,credentials:'omit',cache:'no-store',signal:abort.signal,
+      const r=await fetch(base+'/v1/'+path,{method,credentials:'omit',cache:'no-store',redirect:'error',signal:abort.signal,
         headers:{...(body?{'Content-Type':'application/json'}:{}),...(token?{Authorization:'Bearer '+token}:{})},
         ...(body?{body:JSON.stringify(body)}:{})});
       if (!r.ok) throw Object.assign(new Error('scheduler-'+r.status),{status:r.status});
@@ -45,7 +45,7 @@ const MayaPush = (() => {
     }).catch(()=>null).finally(()=>{preparing=null;});
     return preparing;
   }
-  async function turnOn(owner,enrollment,current=()=>true) {
+  async function turnOn(owner,readEnrollment,current=()=>true) {
     if (!configured || support()!=='ready') throw new Error(support());
     if (Notification.permission==='denied') throw new Error('permission');
     if (enabled(owner)) return;
@@ -64,13 +64,16 @@ const MayaPush = (() => {
         prepared=null; await sub.unsubscribe(); await prepare(); throw new Error('try-again');
       }
     }
+    const created = !sub;
     // Subscribe directly from the button gesture, without another await first.
     try { if (!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey}); }
     catch(e){if(e.name==='NotAllowedError')throw new Error('permission');throw e;}
     let enrolled;
     try {
       if (!current()) throw new Error('session-changed');
-      enrolled=await api('devices',{method:'POST',body:{subscription:sub.toJSON()},token:enrollment||''});
+      const enrollment = await readEnrollment();
+      if (!current()) throw new Error('session-changed');
+      enrolled=await api('devices',{method:'POST',body:{subscription:sub.toJSON()},token:enrollment});
       if (!enrolled?.deviceId || !enrolled.token || !current()) throw new Error('registration-incomplete');
       await MayaPushStorage.change(old=>({write:old?.owner===owner
         ? {owner,deviceId:enrolled.deviceId,scope:null,jobs:[],completed:old.completed||{}} : null}));
@@ -79,7 +82,8 @@ const MayaPush = (() => {
       lastNetwork=lastLocal=''; prepared=null;
     } catch(e) {
       if (enrolled?.deviceId && enrolled.token) await api(route(enrolled),{method:'DELETE',token:enrolled.token}).catch(()=>{});
-      await sub.unsubscribe().catch(()=>{}); prepared=null; prepare(); throw e;
+      if (created || enrolled) await sub.unsubscribe().catch(()=>{});
+      prepared=null; prepare(); throw e;
     }
   }
   function seen(prev,scope) {
@@ -162,5 +166,5 @@ const MayaPush = (() => {
       catch(e){if(e.status===401){await turnOff();return;}throw e;}
     }
   }
-  return {configured,support,enabled,prepare,turnOn,turnOff,setDesired};
+  return {configured,support,enabled,prepare,isPrepared:()=>!!prepared,turnOn,turnOff,setDesired};
 })();

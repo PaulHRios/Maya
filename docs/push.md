@@ -2,7 +2,7 @@
 
 Keep `MAYA_PUSH_BASE` blank in `js/push-config.js` unless the HTTPS scheduler is deployed and verified. With a blank value, the app uses foreground reminders only and does not contact a scheduler.
 
-The scheduler receives the browser's push subscription for delivery; pending jobs contain only random IDs and delivery/expiration timestamps. The app does not send names, logs, photos, reminder categories or notification text to the scheduler. The service worker constructs the private text locally. Opt in from Settings → Reminders after installing the app to the Home Screen on iOS 16.4+. Activation requires the server's enrollment code when configured. It is entered in the UI and not stored by the app; never put this code or a private VAPID key into public source.
+The scheduler receives the browser's push subscription for delivery; pending jobs contain only random IDs and delivery/expiration timestamps. The app does not send names, logs, photos, reminder categories or notification text to the scheduler. The service worker constructs the private text locally. Opt in from Home or Settings → Reminders after adding the app to the Home Screen on iOS 16.4+. On a signed-in family device, tap Enable notifications and accept the operating system prompt. The app obtains the required enrollment authorization privately without asking the user to enter anything. Never place enrollment credentials or a private VAPID key in public source.
 
 API: GET `/v1/public-key`; POST `/v1/devices` for enrollment; PUT `/v1/devices/:id/jobs` to replace the outstanding jobs; DELETE `/v1/devices/:id` to revoke. A short expiry and local cancellation reduce stale-message races. Safari expects a visible notification per valid push event. Do not use push as a silent data transport.
 
