@@ -1,6 +1,8 @@
 /* Service worker: deja usar la app sin internet (los datos viven en el
    dispositivo y se sincronizan cuando vuelve la conexión). */
-const CACHE = 'maya-v19';
+importScripts('./js/reminders.js', './js/push-storage.js');
+
+const CACHE = 'maya-v20';
 const ARCHIVOS = [
   './',
   './index.html',
@@ -9,6 +11,9 @@ const ARCHIVOS = [
   './js/store.js',
   './js/reminders.js',
   './js/photo-thumbs.js',
+  './js/push-config.js',
+  './js/push-storage.js',
+  './js/push-client.js',
   './js/actividades.js',
   './js/analisis.js',
   './js/epds.js',
@@ -63,5 +68,33 @@ self.addEventListener('notificationclick', e => {
     const page = pages.find(p => p.url.startsWith(self.registration.scope));
     if (page) await page.focus();
     else await self.clients.openWindow(self.registration.scope);
+  })());
+});
+
+function pushBody(job, now) {
+  const en=job.lang==='en', name=String(job.name || (en ? 'your baby' : 'tu bebé')).slice(0,80);
+  const minutes=Math.max(0,Math.floor((now-job.since)/60000));
+  const elapsed=minutes>=60 ? Math.floor(minutes/60)+' h'+(minutes%60?' '+minutes%60+' min':'') : minutes+' min';
+  if(job.type==='photo') return en ? name+'’s week '+job.week+' photo is still missing.' : 'Falta la foto de '+name+' de la semana '+job.week+'.';
+  if(job.type==='feed') return en ? 'It’s been '+elapsed+' since '+name+'’s last logged feed.' : 'Hace '+elapsed+' que no registras una toma de '+name+'.';
+  if(job.type==='poop') return en ? 'It’s been '+elapsed+' since '+name+'’s last logged dirty diaper.' : 'Hace '+elapsed+' que no registras popó de '+name+'.';
+  if(job.type==='wet') return en ? 'It’s been '+elapsed+' since '+name+'’s last logged wet diaper.' : 'Hace '+elapsed+' que no registras pipí de '+name+'.';
+  return en ? name+' has been awake for '+elapsed+' based on your logs. Check the wake window.' : name+' lleva '+elapsed+' despierta según el registro. Revisa su ventana de sueño.';
+}
+
+self.addEventListener('push', event => {
+  event.waitUntil((async () => {
+    let id;
+    try { id=event.data?.json()?.id; } catch { return; }
+    if(typeof id!=='string' || !/^[A-Za-z0-9_-]{22,64}$/.test(id)) return;
+    const now=Date.now();
+    const job=await MayaPushStorage.change(state=>{
+      const entry=state?.jobs?.find(j=>j.id===id);
+      if(!entry || entry.delivered || now<entry.at-10000 || now>=entry.expiresAt ||
+        MayaReminders.isQuiet(entry.prefs,new Date(now))) return {value:null};
+      return {value:entry,write:{...state,jobs:state.jobs.map(j=>j.id===id?{...j,delivered:true}:j)}};
+    }).catch(()=>null);
+    if(!job) return;
+    await self.registration.showNotification('Maya',{body:pushBody(job,now),icon:'./icons/icon-192.png',tag:'maya-care-'+job.id});
   })());
 });

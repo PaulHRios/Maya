@@ -64,6 +64,47 @@ const MayaReminders = (() => {
     }
     return r;
   }
-  return { settings, isQuiet, due };
+  function nextAllowed(prefs, earliest) {
+    if (!isQuiet(prefs, new Date(earliest))) return earliest;
+    if (prefs.from === prefs.to) return null;
+    const [hour, minute] = prefs.to.split(':').map(Number);
+    const target = new Date(earliest);
+    target.setHours(hour, minute, 0, 0);
+    if (+target <= earliest) target.setDate(target.getDate() + 1);
+    return isQuiet(prefs, target) ? null : +target;
+  }
+
+  function pushPlan({data, timers = {}, prefs:raw, now = Date.now(), sleepMin, week, weekStart, weekEnd}) {
+    const prefs = settings(raw), out = [];
+    if (!data) return out;
+    function add(type, key, dueAt, deadline) {
+      if (!prefs[type] || !Number.isFinite(dueAt) || !Number.isFinite(deadline) || deadline <= now) return;
+      const at = nextAllowed(prefs, Math.max(dueAt, now + 15000));
+      if (at === null || at >= deadline || at > now + 14*DAY) return;
+      out.push({id:type + ':' + key, type, since:type === 'photo' ? null : key,
+        week:type === 'photo' ? key : null, dueAt, at, deadline, expires:Math.min(at + 15*MINUTE, deadline)});
+    }
+    const span = (type, since, elapsed, stale) => {
+      if (Number.isFinite(since) && Number.isFinite(elapsed) && elapsed > 0)
+        add(type, since, since + elapsed, since + elapsed + stale);
+    };
+    if (!timers.toma) span('feed', latest(data.tomas,'inicio',now), prefs.feedHours*HOUR, DAY);
+    const diaper = (type, hours, kind) => span(type, latest(data.panales,'hora',now,
+      p => p.tipo === kind || p.tipo === 'mixto'), hours*HOUR, DAY);
+    diaper('poop',prefs.poopHours,'popo'); diaper('wet',prefs.wetHours,'pipi');
+    if (!timers.sueno) {
+      const wake = timestamp(timers.vigilia?.inicio);
+      const previous = latest(data.suenos,'fin',now,s => s.tipo !== 'vigilia');
+      const since = Math.max(wake <= now ? wake : -Infinity, Number.isFinite(previous) ? previous : -Infinity);
+      const duration = (prefs.sleepMinutes || sleepMin)*MINUTE;
+      if (duration < DAY) span('sleep',since,duration,DAY-duration);
+    }
+    if (Number.isInteger(week) && week >= 0 && weekStart <= now && now < weekEnd &&
+      !(data.fotos || []).some(p => p.categoria !== 'panal' && p.semana === week)) {
+      add('photo',week,weekStart + 4*DAY,weekEnd);
+    }
+    return out;
+  }
+  return { settings, isQuiet, due, pushPlan };
 })();
 if (typeof module !== 'undefined') module.exports = MayaReminders;

@@ -520,6 +520,10 @@ const Store = (() => {
       ? ['demo']
       : [familiaActiva(), sesionActiva()?.email || getDispositivo(), bebeActivo, config.owner, config.repo, config.branch]);
   }
+  function pushOwner() {
+    if (modoDemo || !hasRealSession()) return '';
+    return JSON.stringify([familiaActiva(), sesionActiva()?.email || getDispositivo()]);
+  }
   const photoKey = f => JSON.stringify([f.id, f.archivo || '', f.fecha || '']);
   const thumbRemovalKey = () => 'maya.thumb-removal.v1.' + photoCacheScope();
   function queueThumbRemoval(filename) {
@@ -746,7 +750,7 @@ const Store = (() => {
     get modoDemo() { return modoDemo; },
     get bebeActivo() { return bebeActivo; },
     getTimers, setTimers,
-    syncNow, scheduleSync, testConnection, canSync, fetchPhoto, fetchThumb, photoCacheScope,
+    syncNow, scheduleSync, testConnection, canSync, fetchPhoto, fetchThumb, photoCacheScope, pushOwner,
     get data() { return data; },
     set data(d) { data = d; },
     get config() { return config; },

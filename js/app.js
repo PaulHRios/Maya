@@ -3083,6 +3083,24 @@
       `Falta la foto de ${name} de la semana ${week}.`, `${name}’s week ${week} photo is still missing.`);
   }
   let remLast = '';
+  function pushCard() {
+    if (Store.modoDemo || !MayaPush.configured || !Store.pushOwner()) return '';
+    const support = MayaPush.support(), on = MayaPush.enabled(Store.pushOwner());
+    return `<div class="card reminders-card" id="background-push-settings">
+      <h2>📲 ${remText('Avisos con la app cerrada','Reminders while the app is closed')}</h2>
+      <p>${remText('Se agendan con los últimos registros que vio este dispositivo. Lo anotado en otro teléfono no cambia el aviso hasta que esta app vuelva a sincronizar.','Scheduled from this device’s latest logs. Entries on another phone cannot cancel its scheduled reminders until this app syncs again.')}</p>
+      <p>${remText('El servidor recibe solo identificadores aleatorios y horarios, además de la suscripción de notificaciones. El texto se prepara aquí y puede verse en la pantalla bloqueada.','The scheduler receives only random IDs, times, and your push subscription. Notification text is prepared here and may appear on the lock screen.')}</p>
+      ${!on && support==='ready' ? `<label class="form-group">${remText('Código de activación','Activation code')}
+        <input id="push-enrollment" type="password" autocomplete="off" autocapitalize="none" spellcheck="false">
+      </label>` : ''}
+      ${on || support==='ready' ? `<button class="btn-secondary btn-block" id="rem-push-toggle" type="button">${on
+        ? remText('Desactivar avisos con la app cerrada','Turn off closed-app reminders')
+        : remText('Activar avisos con la app cerrada','Enable closed-app reminders')}</button>` : ''}
+      ${support==='install' ? `<p>${remText('En iPhone o iPad, agrega Maya a la pantalla de inicio desde Compartir en Safari y abre ese icono.','On iPhone or iPad: add Maya to the Home Screen from Safari’s Share menu, then open that icon.')}</p>` : ''}
+      ${support==='unsupported' ? `<p>${remText('Tu navegador no admite avisos con la app cerrada.','This browser does not support Web Push.')}</p>` : ''}
+      <p id="rem-push-status" role="status"></p>
+    </div>`;
+  }
   function remCard() {
     const p = remPrefs();
     const check = (k, label) => `<label class="checkbox-row"><input type="checkbox" name="${k}" ${p[k] ? 'checked' : ''}> ${label}</label>`;
@@ -3113,6 +3131,32 @@
   function bindReminders() {
     const form = $('#rem-settings');
     if (!form) return;
+    const toggle = $('#rem-push-toggle');
+    if (toggle && !MayaPush.enabled(Store.pushOwner())) MayaPush.prepare();
+    if (toggle) toggle.onclick = async () => {
+      const owner = Store.pushOwner(), current = () => owner && owner === Store.pushOwner();
+      const status = $('#rem-push-status'), field = $('#push-enrollment');
+      const code = field?.value.trim() || '';
+      toggle.disabled = true;
+      const turnOff = MayaPush.enabled(owner);
+      try {
+        if (turnOff) await MayaPush.turnOff();
+        else await MayaPush.turnOn(owner, code, current);
+        if (field) field.value = '';
+        if (current()) render();
+      } catch (e) {
+        if (!current()) return;
+        status.textContent = e.message === 'permission'
+          ? remText('Activa el permiso de notificaciones para Maya.','Enable notifications for Maya.')
+          : ['preparing','try-again'].includes(e.message)
+            ? remText('Preparando este dispositivo. Toca Activar de nuevo en unos segundos.','Preparing this device. Tap Enable again in a few seconds.')
+            : [401,403].includes(e.status)
+              ? remText('Revisa el código de activación.','Check the activation code.')
+              : remText('No se pudo activar por ahora. Reintenta desde la app instalada.','Could not enable right now. Retry from the installed app.');
+        if (field && !['try-again','preparing'].includes(e.message)) field.value = '';
+        toggle.disabled = false;
+      }
+    };
     form.onsubmit = async e => {
       e.preventDefault();
       const p = {};
@@ -3131,7 +3175,28 @@
       toast(remText('Recordatorios guardados', 'Reminders saved'));
     };
   }
+  function updateHomePushCta() {
+    const box = $('#home-push-cta');
+    const button = $('#home-push-settings');
+    if (!box || !button) return;
+    const owner = Store.pushOwner();
+    const visible = tabActual === 'inicio' && !Store.modoDemo && Store.hasRealSession()
+      && MayaPush.configured && !!owner && !MayaPush.enabled(owner);
+    box.classList.toggle('hidden', !visible);
+    if (!visible) return;
+    button.textContent = remText('Configurar avisos con la app cerrada', 'Set up closed-app reminders');
+    button.onclick = () => {
+      $('#btn-settings').click();
+      const settings = $('#background-push-settings');
+      if (!settings) return;
+      const heading = settings.querySelector('h2');
+      heading?.setAttribute('tabindex', '-1');
+      heading?.focus({ preventScroll: true });
+      settings.scrollIntoView({ block: 'start' });
+    };
+  }
   function checkReminders() {
+    updateHomePushCta();
     const box = $('#care-reminders');
     if (!box || document.visibilityState !== 'visible' || !Store.hasSession()) return;
     const prefs = remPrefs(), scope = Store.photoCacheScope();
@@ -3165,7 +3230,18 @@
       const el = box.querySelector(`[data-rem-copy="${a.type}"]`);
       if (el?.textContent !== txt && el) el.textContent = txt;
     }
-    if (prefs.system && !Store.modoDemo && 'Notification' in window && Notification.permission === 'granted') {
+    if (!Store.modoDemo && MayaPush.configured && Store.pushOwner()) {
+      const baby = Store.data.bebe, week = semanaActual();
+      const birth = baby.nacimiento ? Date.parse(`${baby.nacimiento}T${baby.hora || '12:00'}`) : NaN;
+      const weekStart = Number.isInteger(week) ? birth + week*7*86400000 : NaN;
+      const plan = MayaReminders.pushPlan({data:Store.data,timers:Store.getTimers(),prefs,
+        sleepMin:ventanaEdad()?.min,week,weekStart,weekEnd:weekStart+7*86400000});
+      MayaPush.setDesired({owner:Store.pushOwner(),scope,plan,
+        dismissed:{...remRead('notified',{}),...dismissed},options:prefs,
+        name:baby.nombre || remText('tu bebé','your baby'),lang:I18N.lang,
+        allowNetwork:!Store.canSync() || !['off','busy'].includes(Store.syncState)});
+    }
+    if (prefs.system && !MayaPush.enabled(Store.pushOwner()) && !Store.modoDemo && 'Notification' in window && Notification.permission === 'granted') {
       const notified = remRead('notified', {});
       const fresh = visible.filter(a => !notified[a.id]);
       if (fresh.length) {
@@ -3190,6 +3266,7 @@
       ${volverMas}
       <h2 class="section-title">Ajustes ⚙️</h2>
       ${remCard()}
+      ${pushCard()}
 
       <div class="card">
         <h2>👶 Bebé</h2>
@@ -3403,6 +3480,9 @@
     $('#a-logout').onclick = async () => {
       const scope = Store.photoCacheScope();
       const isDemo = Store.modoDemo;
+      if (!isDemo && MayaPush.configured) await Promise.race([
+        MayaPush.turnOff({clearHistory:true}).catch(()=>{}), new Promise(resolve=>setTimeout(resolve,1100)),
+      ]);
       Store.logout();
       if (!isDemo) await Promise.race([MayaPhotoThumbs.discard(scope).catch(() => {}), new Promise(resolve => setTimeout(resolve, 400))]);
       sessionStorage.setItem('maya.ir-login', '1');

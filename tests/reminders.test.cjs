@@ -42,3 +42,23 @@ test('Weekly photo reminder has one occurrence, does not backfill, and stops on 
   assert.equal(run({prefs,week:26,data:{ ...data,fotos:[{semana:25}] }})[0].id,'photo:26');
   assert.deepEqual(run({prefs,week:26,data:{ ...data,fotos:[{semana:26}] }}),[]);
 });
+test('Push photo job belongs only to the current age week and expires at rollover', () => {
+  const weekStart=+new Date(2026,10,18,10), weekEnd=weekStart+7*86400000;
+  const prefs={photo:true,quiet:true,from:'21:00',to:'08:00'};
+  const upcoming=R.pushPlan({data:{fotos:[{semana:24}]},prefs,now:+date,week:25,weekStart,weekEnd});
+  assert.equal(upcoming[0].id,'photo:25');
+  assert.ok(upcoming[0].at<weekEnd && upcoming[0].expires<=weekEnd);
+  assert.deepEqual(R.pushPlan({data:{fotos:[{semana:25}]},prefs,now:+date,week:25,weekStart,weekEnd}),[]);
+  assert.deepEqual(R.pushPlan({data:{fotos:[]},prefs,now:weekEnd,week:25,weekStart,weekEnd}),[]);
+  const nearEnd=+new Date(2026,10,24,22);
+  assert.deepEqual(R.pushPlan({data:{fotos:[]},prefs,now:nearEnd,week:25,
+    weekStart:nearEnd-7*86400000+3600000,weekEnd:nearEnd+3600000}),[]);
+});
+test('Quiet hours defer a pending feed reminder until silence ends', () => {
+  const now=+new Date(2026,10,24,20);
+  const a=R.pushPlan({data:{tomas:[{inicio:new Date(now-10*60000).toISOString()}]},
+    prefs:{feed:true,feedHours:4},now})[0];
+  assert.equal(new Date(a.at).getHours(),8);
+  assert.equal(new Date(a.at).getDate(),25);
+  assert.ok(a.expires<=a.at+900000);
+});
